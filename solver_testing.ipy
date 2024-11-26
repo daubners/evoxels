@@ -2,10 +2,10 @@
 import voxelsss as vox
 import numpy as np
 import time
-%matplotlib qt
+# %matplotlib qt
 
 #%%
-nx, ny, nz = [100, 100, 20]
+nx, ny, nz = [100, 100, 100]
 
 sim = vox.voxelFields(nx, ny, nz, (1,1,1))
 
@@ -38,11 +38,11 @@ sim = vox.voxelFields(nx, ny, nz, (1,1,1))
 noise = 0.5 + 0.1*np.random.rand(nx, ny, nz)
 sim.add_field("noise", noise)
 
-a = vox.CahnHilliardSolver(sim, "noise", device='cpu')
-a.solve(time_increment=0.002, max_iters=10000, verbose='plot')
+a = vox.CahnHilliardSolver(sim, "noise", device='cuda')
+a.solve(time_increment=0.002, max_iters=10000)
 
 #%%
-sim.plotFieldInteractive("diagonal", direction='x')
+sim.plotFieldInteractive("noise", direction='x')
 
 #%%
 # Make little convergence study

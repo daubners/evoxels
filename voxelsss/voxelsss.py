@@ -24,13 +24,16 @@
 ### Dyson School of Design Engineering
 ### Imperial College London
 
+import ipywidgets as widgets
+from IPython.display import display
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+# from matplotlib.widgets import Slider
 import numpy as np
 import pyvista as pv
 import sys
 from timeit import default_timer as timer
 import torch
+import torch.fft as fft
 import torch.nn.functional as F
 
 
@@ -90,7 +93,7 @@ class voxelFields:
             grid.cell_data[name] = self.fields[name].flatten(order="F")  # Fortran order flattening
         grid.save(filename)
 
-    def plotSlice(self, fieldname, slice_index, direction='z', dpi=200, colormap='viridis'):
+    def plot_slice(self, fieldname, slice_index, direction='z', dpi=200, colormap='viridis'):
         plt.figure(figsize=(5, 5), dpi=dpi)
         # Colormaps
         # linear: viridis, Greys
@@ -122,7 +125,7 @@ class voxelFields:
         plt.title(title)
         plt.show()
 
-    def plotFieldInteractive(self, fieldname, direction='x', dpi=200, colormap='viridis'):
+    def plot_field_interactive(self, fieldname, direction='x', dpi=200, colormap='viridis'):
         if direction == 'x':
             axes = (0,1,2)
             end1 = self.spacing[1]
@@ -144,27 +147,26 @@ class voxelFields:
         field = np.transpose(self.fields[fieldname], axes)
         max_id = np.max(np.unique(field))
         # Create the initial plot
-        fig, ax = plt.subplots(dpi=dpi)
-        im = ax.imshow(np.transpose(field[0]), cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=0, vmax=max_id)
-
-        # Add a slider for changing timeframes
-        layer = field.shape[0]-1
-        ax_slider = plt.axes([0.2, 0.02, 0.6, 0.03])
-        axis_slider = Slider(ax_slider, 'slice', 0, layer, valinit=0, valstep=1)
-
-        # Function to update the plot based on the slider value
-        def update(val):
-            x = int(axis_slider.val)
-            im.set_array(field[x].T)
-            ax.set_title(f'Slice {x} in ' + direction + '-direction of '+fieldname)
-            fig.canvas.draw_idle()
-
-        # Connect the slider to the update function
-        axis_slider.on_changed(update)
-
+        fig, ax = plt.subplots(figsize=(5, 5), dpi=dpi)
+        im = ax.imshow(field[0], cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=0, vmax=max_id)
         ax.set_xlabel(label1)
         ax.set_ylabel(label2)
-        return axis_slider
+        ax.set_title(f'Slice 0 in {direction}-direction of {fieldname}')
+        plt.colorbar(im, ax=ax)
+
+        # Add a slider for changing timeframes
+        slider = widgets.IntSlider(value=0, min=0, max=field.shape[0]-1, step=1, description='Slice:', continuous_update=True)
+
+        # Function to update the plot based on the slider value
+        def update_slice(change):
+            slice_idx = change['new']
+            im.set_data(field[slice_idx])
+            ax.set_title(f'Slice {slice_idx} in ' + direction + '-direction of ' + fieldname)
+            fig.canvas.draw_idle()
+
+        slider.observe(update_slice, names='value')
+        display(slider)
+        plt.show()
 
 
 class BaseSolver:
@@ -180,6 +182,8 @@ class BaseSolver:
         self.data = data
         self.device = torch.device(device)
         self.precision = torch.float32
+
+        self.spacing = data.spacing
 
     # def write_frame(self, data, fieldname, current_iteration: int):
     #     if current_iteration%self.n_plot == 0
@@ -217,40 +221,18 @@ class CahnHilliardSolver(BaseSolver):
         super().__init__(data, device)
         self.field = fieldname
         self.tensor = torch.tensor(data.fields[fieldname], dtype=self.precision, device=self.device)
-        self.tensor = self.tensor.unsqueeze(0).unsqueeze(0)
-
-        laplace_kernel =torch.tensor([[[0, 0, 0],
-                                       [0, 1, 0],
-                                       [0, 0, 0]],
-
-                                      [[0, 1, 0],
-                                       [1, -6, 1],
-                                       [0, 1, 0]],
-
-                                      [[0, 0, 0],
-                                       [0, 1, 0],
-                                       [0, 0, 0]]],
-                                    dtype=self.precision, device=device)
-        self.laplace_kernel = laplace_kernel.unsqueeze(0).unsqueeze(0)
+        # self.tensor = self.tensor.unsqueeze(0).unsqueeze(0)
 
     def calc_laplace(self, tensor):
         padded = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
-        self.laplace = F.conv3d(padded, self.laplace_kernel)
-
-    def calc_laplace2(self, tensor):
-        tensor = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
-        self.laplace = F.conv3d(padded, self.laplace_kernel)
-        tensor = tensor[:, :, 1:-1, 1:-1, 1:-1]
-
-    # def calc_laplace2(self, tensor):
-    #     padded = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
-    #     self.laplace = padded[:, :, 2:, 1:-1, 1:-1] + \
-    #                    padded[:, :, :-2, 1:-1, 1:-1] + \
-    #                    padded[:, :, 1:-1, 2:, 1:-1] + \
-    #                    padded[:, :, 1:-1, :-2, 1:-1] + \
-    #                    padded[:, :, 1:-1, 1:-1, 2:] + \
-    #                    padded[:, :, 1:-1, 1:-1, :-2] - \
-    #                  6*padded[:, :, 1:-1, 1:-1, 1:-1]
+        # Manual indexing is ~10x faster than conv3d with laplace kernel
+        self.laplace = padded[:, 2:, 1:-1, 1:-1] + \
+                       padded[:, :-2, 1:-1, 1:-1] + \
+                       padded[:, 1:-1, 2:, 1:-1] + \
+                       padded[:, 1:-1, :-2, 1:-1] + \
+                       padded[:, 1:-1, 1:-1, 2:] + \
+                       padded[:, 1:-1, 1:-1, :-2] - \
+                     6*padded[:, 1:-1, 1:-1, 1:-1]
 
     def solve(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000, verbose=True):
         """
@@ -261,31 +243,32 @@ class CahnHilliardSolver(BaseSolver):
         self.frame = 0
         self.D = diffusivity
         self.eps = epsilon
+        self.tensor = self.tensor.unsqueeze(0)
+        torch.cuda.reset_peak_memory_stats()
 
-        if verbose == 'plot':
-            slice = int(self.tensor.shape[-1]/2)
-            fig, ax = plt.subplots(dpi=200)
-            im = ax.imshow(self.tensor[0,0,:,:,slice].cpu().numpy(), cmap='turbo', origin='lower', vmin=0, vmax=1)
-            ax.set_title("Cahn-Hilliard Simulation")
-            fig.colorbar(im, ax=ax)
-            plt.ion()  # Turn on interactive mode
+        # if verbose == 'plot':
+        #     slice = int(self.tensor.shape[-1]/2)
+        #     fig, ax = plt.subplots(dpi=200)
+        #     im = ax.imshow(self.tensor[0,:,:,slice].cpu().numpy(), cmap='turbo', origin='lower', vmin=0, vmax=1)
+        #     ax.set_title("Cahn-Hilliard Simulation")
+        #     fig.colorbar(im, ax=ax)
+        #     plt.ion()  # Turn on interactive mode
 
         with torch.no_grad():
             start = timer()
             for i in range(max_iters):
-                # self.write_frame(self, i)
                 if i % self.n_plot == 0:
                     self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
                     filename = self.field+f"_{self.frame:03d}.vtk"
                     self.data.export_to_vtk(filename=filename, field_names=[self.field])
-                    if verbose == 'plot':
-                        im.set_data(self.data.fields[self.field][:,:,slice])
-                        ax.set_title(f"Step {self.frame}")
-                        plt.draw()  # Redraw the figure
-                        plt.pause(0.01)
-                    if np.isnan(self.data.fields[self.field]).any():
-                        print(f"NaN detected in frame {self.frame}. Aborting simulation.")
-                        sys.exit(1)  # Exit the program with an error status
+                    # if verbose == 'plot':
+                    #     im.set_data(self.data.fields[self.field][:,:,slice])
+                    #     ax.set_title(f"Step {self.frame}")
+                    #     plt.draw()  # Redraw the figure
+                    #     plt.pause(0.01)
+                    # if np.isnan(self.data.fields[self.field]).any():
+                    #     print(f"NaN detected in frame {self.frame}. Aborting simulation.")
+                    #     sys.exit(1)  # Exit the program with an error status
                     self.frame += 1
 
                 # Numerical increment
@@ -296,15 +279,28 @@ class CahnHilliardSolver(BaseSolver):
 
             if verbose:
                 print(f'Wall time: {np.around(timer() - start, 4)} s ({np.around((timer() - start)/max_iters, 4)} s/iter)')
-            if verbose == 'plot':
-                plt.ioff()
-                plt.show()
+                print(f"GPU-RAM currently allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
+                print(f"GPU-RAM maximally allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
+            # if verbose == 'plot':
+            #     plt.ioff()
+            #     plt.show()
 
             self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
             filename = self.field+f"_{self.frame:03d}.vtk"
             self.data.export_to_vtk(filename=filename, field_names=[self.field])
 
-    def solve2(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000):
+    def initialise_wavenumbers(self):
+        Nx, Ny, Nz = self.tensor.shape
+        dx, dy, dz = self.spacing
+
+        kx = 2 * torch.pi * torch.fft.fftfreq(Nx, d=dx, device=self.device)
+        ky = 2 * torch.pi * torch.fft.fftfreq(Ny, d=dy, device=self.device)
+        kz = 2 * torch.pi * torch.fft.fftfreq(Nz, d=dz, device=self.device)
+        kx, ky, kz = torch.meshgrid(kx, ky, kz, indexing="ij")
+
+        return kx**2 + ky**2 + kz**2
+
+    def solveFFT(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000, verbose=True):
         """
         Solves the Cahn-Hilliard equation using the specified numerical method.
         """
@@ -313,52 +309,41 @@ class CahnHilliardSolver(BaseSolver):
         self.frame = 0
         self.D = diffusivity
         self.eps = epsilon
+        k_squared = self.initialise_wavenumbers()
 
-        for i in range(max_iters):
-            # self.write_frame(self, i)
-            if i % self.n_plot == 0:
-                self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
-                filename = self.field+f"_{self.frame:03d}.vtk"
-                self.data.export_to_vtk(filename=filename, field_names=[self.field])
-                self.frame += 1
+        with torch.no_grad():
+            start = timer()
+            for i in range(max_iters):
+                if i % self.n_plot == 0:
+                    self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+                    filename = self.field+f"_{self.frame:03d}.vtk"
+                    self.data.export_to_vtk(filename=filename, field_names=[self.field])
+                    # if verbose == 'plot':
+                    #     im.set_data(self.data.fields[self.field][:,:,slice])
+                    #     ax.set_title(f"Step {self.frame}")
+                    #     plt.draw()  # Redraw the figure
+                    #     plt.pause(0.01)
+                    # if np.isnan(self.data.fields[self.field]).any():
+                    #     print(f"NaN detected in frame {self.frame}. Aborting simulation.")
+                    #     sys.exit(1)  # Exit the program with an error status
+                    self.frame += 1
 
-            # Numerical increment
-            self.calc_laplace2(self.tensor)
-            mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
-            self.calc_laplace2(mu)
-            self.tensor += time_increment * self.D * self.laplace
+                # Numerical increment
+                dfhom_dc = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor)
+                nonlinear_term_hat = fft.fftn(dfhom_dc)
+                # Update c_hat using semi-implicit scheme
+                c_hat = (fft.fftn(self.tensor) - time_increment*self.D*k_squared*nonlinear_term_hat) / (1 + 2*self.eps*time_increment*self.D*k_squared**2)
+                # Transform back to real space
+                self.tensor = torch.real(fft.ifftn(c_hat))
 
-        self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
-        filename = self.field+f"_{self.frame:03d}.vtk"
-        self.data.export_to_vtk(filename=filename, field_names=[self.field])
+            if verbose:
+                print(f'Wall time: {np.around(timer() - start, 4)} s ({np.around((timer() - start)/max_iters, 4)} s/iter)')
+                print(f"GPU-RAM currently allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
+                print(f"GPU-RAM maximally allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
 
-    def solveFFT(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000):
-        """
-        Solves the Cahn-Hilliard equation using the specified numerical method.
-        """
-        # Specific numerical implementation for Cahn-Hilliard equation
-        self.n_plot = int(max_iters/frames)
-        self.frame = 0
-        self.D = diffusivity
-        self.eps = epsilon
-
-        for i in range(max_iters):
-            # self.write_frame(self, i)
-            if i % self.n_plot == 0:
-                self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
-                filename = self.field+f"_{self.frame:03d}.vtk"
-                self.data.export_to_vtk(filename=filename, field_names=[self.field])
-                self.frame += 1
-
-            # Numerical increment
-            self.calc_laplace2(self.tensor)
-            mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
-            self.calc_laplace2(mu)
-            self.tensor += time_increment * self.D * self.laplace
-
-        self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
-        filename = self.field+f"_{self.frame:03d}.vtk"
-        self.data.export_to_vtk(filename=filename, field_names=[self.field])
+            self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+            filename = self.field+f"_{self.frame:03d}.vtk"
+            self.data.export_to_vtk(filename=filename, field_names=[self.field])
 
 
 class TortuositySolver(BaseSolver):
