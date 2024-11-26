@@ -1,23 +1,48 @@
 #%% Test usage
-import hexer as hex
+import voxelsss as vox
 import numpy as np
+import time
+%matplotlib qt
 
-Nx = 100
-Ny = 116
-hex_plane = hex.HexDiscretisation(Nx, Ny, 1.0)
-mask = np.load('mask.npy')
-hex_plane.add_field("mask", mask)
-# solver = hex.CahnHilliardSolver(hex_plane, "mask", time_increment=0.02, frames=1, max_iters=5000)
-# solver.solve()
-# hex_plane.fields["mask"][hex_plane.fields["mask"]>0.5] = 1.0
-# hex_plane.fields["mask"][hex_plane.fields["mask"]<=0.5] = 0
+#%%
+nx, ny, nz = [100, 100, 20]
 
-# hex_plane.add_field("mask")
-# hex.add_hexel_sphere(hex_plane,"mask", 0,0,0,3)
+sim = vox.voxelFields(nx, ny, nz, (1,1,1))
 
-# hex_plane.export_to_vtk()
+# cube = np.zeros((nx, ny, nz))
+# cube[5:-5,5:-5,5:-5] = 1
+# sim.add_field("cube", cube)
 
-hex_plane.add_field("c")
+# diagonal = np.zeros((nx, ny, nz))
+# x, y, z = np.ogrid[:nx, :ny, :nz]
+# plane = (x+0.5)/nx + (z+0.5)/nz + y - y
+# mask = (plane <= 1.0)
+# diagonal[mask] = 1
+# sim.add_field("diagonal", diagonal)
+
+# diagonal2 = np.zeros((nx, ny, nz))
+# x, y, z = np.ogrid[:nx, :ny, :nz]
+# plane = (x+0.5)/nx + (y+0.5)/ny + (z+0.5)/nz
+# mask = (plane <= 1.05) | (plane > 2.0)
+# diagonal2[mask] = 1
+# sim.add_field("diagonal2", diagonal2)
+
+# sphere = np.zeros((nx, ny, nz))
+# radius = np.min([nx,ny,nz])*0.5-3
+# x, y, z = np.ogrid[:nx, :ny, :nz]
+# distance_squared = (x - nx/2 + 0.5)**2 + (y - ny/2 + 0.5)**2 + (z - nz/2 + 0.5)**2
+# mask = distance_squared <= radius**2
+# sphere[mask] = 1
+# sim.add_field("sphere", sphere)
+
+noise = 0.5 + 0.1*np.random.rand(nx, ny, nz)
+sim.add_field("noise", noise)
+
+a = vox.CahnHilliardSolver(sim, "noise", device='cpu')
+a.solve(time_increment=0.002, max_iters=10000, verbose='plot')
+
+#%%
+sim.plotFieldInteractive("diagonal", direction='x')
 
 #%%
 # Make little convergence study

@@ -24,8 +24,12 @@
 ### Dyson School of Design Engineering
 ### Imperial College London
 
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 import numpy as np
 import pyvista as pv
+import sys
+from timeit import default_timer as timer
 import torch
 import torch.nn.functional as F
 
@@ -58,14 +62,14 @@ class voxelFields:
         if array is not None:
             # Check if array is a numpy array and if it has the right shape
             if isinstance(array, np.ndarray):
-                if array.shape == (self.num_x, self.num_y, self.num_z):
+                if array.shape == (self.Nx, self.Ny, self.Nz):
                     self.fields[name] = array
                 else:
                     raise ValueError(f"The provided array must have the shape ({self.num_x}, {self.num_y}, {self.num_z}).")
             else:
                 raise TypeError("The provided array must be a numpy array.")
         else:
-            self.fields[name] = np.zeros((self.num_x, self.num_y, self.num_z))
+            self.fields[name] = np.zeros((self.Nx, self.Ny, self.Nz))
 
     def export_to_vtk(self, filename="output.vtk", field_names=None):
         """
@@ -73,14 +77,14 @@ class voxelFields:
         """
         # Create a structured grid from the array
         grid = pv.ImageData()
-        grid.dimensions = np.array(array.shape) + 1
+        grid.dimensions = (self.Nx + 1, self.Ny + 1, self.Nz + 1)
         grid.spacing = self.spacing
         grid.origin = self.origin
 
         if field_names is not None:
             names = field_names
         else:
-            names, _ = self.fields.items()
+            names = list(self.fields.keys())
 
         for name in names:
             grid.cell_data[name] = self.fields[name].flatten(order="F")  # Fortran order flattening
@@ -97,26 +101,74 @@ class voxelFields:
             slice = np.s_[slice_index,:,:]
             end1 = self.spacing[1]
             end2 = self.spacing[2]
+            label1, label2 = ['Y', 'Z']
         elif direction == 'y':
             slice = np.s_[:,slice_index,:]
             end1 = self.spacing[0]
             end2 = self.spacing[2]
+            label1, label2 = ['X', 'Z']
         elif direction == 'z':
             slice = np.s_[:,:,slice_index]
             end1 = self.spacing[0]
             end2 = self.spacing[1]
+            label1, label2 = ['X', 'Y']
         else:
             raise ValueError("Given direction must be x, y or z")
 
         plt.imshow(self.fields[fieldname][slice], cmap=colormap, origin='lower', extent=[0, end1, 0, end2])
-        plt.xlabel('Y')
-        plt.ylabel('X')
+        plt.xlabel(label1)
+        plt.ylabel(label2)
+        title = fieldname + ' in ' + direction
         plt.title(title)
         plt.show()
 
+    def plotFieldInteractive(self, fieldname, direction='x', dpi=200, colormap='viridis'):
+        if direction == 'x':
+            axes = (0,1,2)
+            end1 = self.spacing[1]
+            end2 = self.spacing[2]
+            label1, label2 = ['Y', 'Z']
+        elif direction == 'y':
+            axes = (1,0,2)
+            end1 = self.spacing[0]
+            end2 = self.spacing[2]
+            label1, label2 = ['X', 'Z']
+        elif direction == 'z':
+            axes = (2,0,1)
+            end1 = self.spacing[0]
+            end2 = self.spacing[1]
+            label1, label2 = ['X', 'Y']
+        else:
+            raise ValueError("Given direction must be x, y or z")
+
+        field = np.transpose(self.fields[fieldname], axes)
+        max_id = np.max(np.unique(field))
+        # Create the initial plot
+        fig, ax = plt.subplots(dpi=dpi)
+        im = ax.imshow(np.transpose(field[0]), cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=0, vmax=max_id)
+
+        # Add a slider for changing timeframes
+        layer = field.shape[0]-1
+        ax_slider = plt.axes([0.2, 0.02, 0.6, 0.03])
+        axis_slider = Slider(ax_slider, 'slice', 0, layer, valinit=0, valstep=1)
+
+        # Function to update the plot based on the slider value
+        def update(val):
+            x = int(axis_slider.val)
+            im.set_array(field[x].T)
+            ax.set_title(f'Slice {x} in ' + direction + '-direction of '+fieldname)
+            fig.canvas.draw_idle()
+
+        # Connect the slider to the update function
+        axis_slider.on_changed(update)
+
+        ax.set_xlabel(label1)
+        ax.set_ylabel(label2)
+        return axis_slider
+
 
 class BaseSolver:
-    def __init__(self, data: voxelFields, device='gpu'):
+    def __init__(self, data: voxelFields, device='cuda'):
         """
         Base solver class to handle common functionality for different solvers.
         Args:
@@ -150,17 +202,19 @@ class BaseSolver:
 
 
 class CahnHilliardSolver(BaseSolver):
-    def __init__(self, data, fieldname, diffusivity=1.0, time_increment=0.01, epsilon=3, device='gpu', frames=10, max_iters=1000):
+    # Note: This is the simplest Cahn-Hilliard system for now with
+    # F = int( eps*|grad(phi)|^2 + 9/eps * phi^2 * (1-phi)^2)
+    # and dc/dt = D*laplace( 18*c*(1-c)*(1-2c) - 2*laplace(c) ).
+    # A non-linear mobility e.g. M=D*c*(1-c) is notoriously more difficult to implement in Fourier space.
+
+    # The current implementation assumes isotropic voxels (dx=dy=dz).
+    # However, this could be easily changed.
+
+    def __init__(self, data: voxelFields, fieldname, device='cuda'):
         """
-        Solver for the Laplace equation with Dirichlet boundary conditions.
+        Solves the Cahn-Hilliard equation for two-phase system with double-well energy assuming periodic BC.
         """
-        super().__init__(data, device, frames, max_iters)
-        self.n_plot = int(max_iters/frames)
-        self.frame = 0
-        self.max_iters = max_iters
-        self.D = diffusivity
-        self.dt = time_increment
-        self.eps = epsilon
+        super().__init__(data, device)
         self.field = fieldname
         self.tensor = torch.tensor(data.fields[fieldname], dtype=self.precision, device=self.device)
         self.tensor = self.tensor.unsqueeze(0).unsqueeze(0)
@@ -170,7 +224,7 @@ class CahnHilliardSolver(BaseSolver):
                                        [0, 0, 0]],
 
                                       [[0, 1, 0],
-                                       [1, 1, 1],
+                                       [1, -6, 1],
                                        [0, 1, 0]],
 
                                       [[0, 0, 0],
@@ -180,41 +234,135 @@ class CahnHilliardSolver(BaseSolver):
         self.laplace_kernel = laplace_kernel.unsqueeze(0).unsqueeze(0)
 
     def calc_laplace(self, tensor):
-        padded = F.pad(tensor, (1,1,1,1), mode='circular')
-        even_laplace = F.conv2d(padded, self.even_laplace_kernel)
-        odd_laplace  = F.conv2d(padded, self.odd_laplace_kernel)
+        padded = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
+        self.laplace = F.conv3d(padded, self.laplace_kernel)
 
-        # Stitch even and odd columns for full laplace
-        self.laplace = torch.zeros_like(self.tensor)
-        self.laplace[:, :, :, ::2] = even_laplace[:, :, :, ::2]
-        self.laplace[:, :, :, 1::2] = odd_laplace[:, :, :, 1::2]
+    def calc_laplace2(self, tensor):
+        tensor = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
+        self.laplace = F.conv3d(padded, self.laplace_kernel)
+        tensor = tensor[:, :, 1:-1, 1:-1, 1:-1]
 
-    def solve(self):
+    # def calc_laplace2(self, tensor):
+    #     padded = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
+    #     self.laplace = padded[:, :, 2:, 1:-1, 1:-1] + \
+    #                    padded[:, :, :-2, 1:-1, 1:-1] + \
+    #                    padded[:, :, 1:-1, 2:, 1:-1] + \
+    #                    padded[:, :, 1:-1, :-2, 1:-1] + \
+    #                    padded[:, :, 1:-1, 1:-1, 2:] + \
+    #                    padded[:, :, 1:-1, 1:-1, :-2] - \
+    #                  6*padded[:, :, 1:-1, 1:-1, 1:-1]
+
+    def solve(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000, verbose=True):
         """
         Solves the Cahn-Hilliard equation using the specified numerical method.
         """
         # Specific numerical implementation for Cahn-Hilliard equation
+        self.n_plot = int(max_iters/frames)
         self.frame = 0
-        for i in range(self.max_iters):
+        self.D = diffusivity
+        self.eps = epsilon
+
+        if verbose == 'plot':
+            slice = int(self.tensor.shape[-1]/2)
+            fig, ax = plt.subplots(dpi=200)
+            im = ax.imshow(self.tensor[0,0,:,:,slice].cpu().numpy(), cmap='turbo', origin='lower', vmin=0, vmax=1)
+            ax.set_title("Cahn-Hilliard Simulation")
+            fig.colorbar(im, ax=ax)
+            plt.ion()  # Turn on interactive mode
+
+        with torch.no_grad():
+            start = timer()
+            for i in range(max_iters):
+                # self.write_frame(self, i)
+                if i % self.n_plot == 0:
+                    self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+                    filename = self.field+f"_{self.frame:03d}.vtk"
+                    self.data.export_to_vtk(filename=filename, field_names=[self.field])
+                    if verbose == 'plot':
+                        im.set_data(self.data.fields[self.field][:,:,slice])
+                        ax.set_title(f"Step {self.frame}")
+                        plt.draw()  # Redraw the figure
+                        plt.pause(0.01)
+                    if np.isnan(self.data.fields[self.field]).any():
+                        print(f"NaN detected in frame {self.frame}. Aborting simulation.")
+                        sys.exit(1)  # Exit the program with an error status
+                    self.frame += 1
+
+                # Numerical increment
+                self.calc_laplace(self.tensor)
+                mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
+                self.calc_laplace(mu)
+                self.tensor += time_increment * self.D * self.laplace
+
+            if verbose:
+                print(f'Wall time: {np.around(timer() - start, 4)} s ({np.around((timer() - start)/max_iters, 4)} s/iter)')
+            if verbose == 'plot':
+                plt.ioff()
+                plt.show()
+
+            self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+            filename = self.field+f"_{self.frame:03d}.vtk"
+            self.data.export_to_vtk(filename=filename, field_names=[self.field])
+
+    def solve2(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000):
+        """
+        Solves the Cahn-Hilliard equation using the specified numerical method.
+        """
+        # Specific numerical implementation for Cahn-Hilliard equation
+        self.n_plot = int(max_iters/frames)
+        self.frame = 0
+        self.D = diffusivity
+        self.eps = epsilon
+
+        for i in range(max_iters):
             # self.write_frame(self, i)
             if i % self.n_plot == 0:
                 self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
                 filename = self.field+f"_{self.frame:03d}.vtk"
-                self.data.export_to_vtk(filename=filename)
+                self.data.export_to_vtk(filename=filename, field_names=[self.field])
                 self.frame += 1
 
             # Numerical increment
-            self.calc_laplace(self.tensor)
+            self.calc_laplace2(self.tensor)
             mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
-            self.calc_laplace(mu)
-            self.tensor += self.dt * self.D * self.laplace
+            self.calc_laplace2(mu)
+            self.tensor += time_increment * self.D * self.laplace
 
         self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
         filename = self.field+f"_{self.frame:03d}.vtk"
-        self.data.export_to_vtk(filename=filename)
+        self.data.export_to_vtk(filename=filename, field_names=[self.field])
+
+    def solveFFT(self, diffusivity=1.0, time_increment=0.01, epsilon=3, frames=10, max_iters=1000):
+        """
+        Solves the Cahn-Hilliard equation using the specified numerical method.
+        """
+        # Specific numerical implementation for Cahn-Hilliard equation
+        self.n_plot = int(max_iters/frames)
+        self.frame = 0
+        self.D = diffusivity
+        self.eps = epsilon
+
+        for i in range(max_iters):
+            # self.write_frame(self, i)
+            if i % self.n_plot == 0:
+                self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+                filename = self.field+f"_{self.frame:03d}.vtk"
+                self.data.export_to_vtk(filename=filename, field_names=[self.field])
+                self.frame += 1
+
+            # Numerical increment
+            self.calc_laplace2(self.tensor)
+            mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
+            self.calc_laplace2(mu)
+            self.tensor += time_increment * self.D * self.laplace
+
+        self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
+        filename = self.field+f"_{self.frame:03d}.vtk"
+        self.data.export_to_vtk(filename=filename, field_names=[self.field])
+
 
 class TortuositySolver(BaseSolver):
-    def __init__(self, data, geometry, fieldname, diffusivity=1.0, omega1=1.0, omega2=1.0, device='cpu', frames=10, max_iters=1000):
+    def __init__(self, data, geometry, fieldname, diffusivity=1.0, omega1=1.0, omega2=1.0, device='cuda', frames=10, max_iters=1000):
         """
         Solver for the Laplace equation with Dirichlet boundary conditions.
         """
