@@ -1,4 +1,4 @@
-# VoxelSSS (Voxel-based structure simulation solvers)
+# voxelsss (voxel-based structure simulation solvers)
 
 <p align="center">
   <img src="voxelsss.png" width="50%"></img>
@@ -21,6 +21,10 @@ Where every voxel finds its space
 
 ## Installation
 
+To utilize all plotting functionality in jupyter notebooks make sure to
+ - pip install ipywidgets
+ - pip install ipympl
+ - jupyter nbextension enable --py widgetsnbextension --sys-prefix
 
 ## Usage
 

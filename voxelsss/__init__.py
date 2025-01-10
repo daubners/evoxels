@@ -1,3 +1,8 @@
 "Init all functions"
 
-from .voxelsss import *
+from .fields import VoxelFields
+from .solvers import CahnHilliardSolver, CahnHilliard4PhaseSolver
+
+__all__ = ['VoxelFields', \
+           'CahnHilliardSolver', \
+           'CahnHilliard4PhaseSolver']

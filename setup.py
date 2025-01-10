@@ -10,6 +10,7 @@ setup(
     install_requires=[
         "numpy",
         "pyvista",
+        "matplotlib",
         "torch"
     ],
     license="MIT license",
