@@ -6,7 +6,7 @@ from timeit import default_timer as timer
 import torch
 import torch.fft as fft
 import torch.nn.functional as F
-import torch_dct as dct
+import warnings
 from .fields import VoxelFields
 
 class BaseSolver:
@@ -20,14 +20,25 @@ class BaseSolver:
         """
         self.data = data
         self.device = torch.device(device)
+        # check device is available
+        if torch.device(device).type.startswith('cuda') and not torch.cuda.is_available():
+            self.device = torch.device('cpu')
+            warnings.warn("CUDA not available, defaulting device to cpu. To avoid this warning, set device=torch.device('cpu')")
         self.precision = torch.float32
         self.spacing = data.spacing
+        self.grid = None
         self.frame = 0
 
-    def print_GPU_stats(self, start, end, iters):
+    def print_memory_stats(self, start, end, iters):
         print(f'Wall time: {np.around(end - start, 4)} s ({np.around((end - start)/iters, 4)} s/iter)')
-        print(f"GPU-RAM currently allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
-        print(f"GPU-RAM maximally allocated {torch.cuda.max_memory_allocated() / 1e6:.2f} MB ({torch.cuda.max_memory_reserved() / 1e6:.2f} MB reserved)")
+        if self.device.type == 'cuda':
+            print(f"GPU-RAM currently allocated {torch.cuda.memory_allocated(device=self.device) / 1e6:.2f} MB ({torch.cuda.memory_reserved(device=self.device) / 1e6:.2f} MB reserved)")
+            print(f"GPU-RAM maximally allocated {torch.cuda.max_memory_allocated(device=self.device) / 1e6:.2f} MB ({torch.cuda.max_memory_reserved(device=self.device) / 1e6:.2f} MB reserved)")
+        elif self.device.type == 'cpu':
+            memory_info = psutil.virtual_memory()
+            print(f"CPU total memory: {memory_info.total / 1e6:.2f} MB")
+            print(f"CPU available memory: {memory_info.available / 1e6:.2f} MB")
+            print(f"CPU used memory: {memory_info.used / 1e6:.2f} MB")
 
     def solve(self):
         """
@@ -39,102 +50,118 @@ class BaseSolver:
 
 
 class CahnHilliardSolver(BaseSolver):
-    # Note: This is the simplest Cahn-Hilliard system for now with
-    # F = int( eps*|grad(phi)|^2 + 9/eps * phi^2 * (1-phi)^2)
-    # and dc/dt = D*laplace( 18*c*(1-c)*(1-2c) - 2*laplace(c) ).
-    # A non-linear mobility e.g. M=D*c*(1-c) is notoriously more difficult to implement in Fourier space.
+    """
+    Cahn-Hilliard system with double-well potential energy
+    c is dimensionless and can be interpreted as molar fraction or phase fraction
+    \epsilon scales the diffuse interface width
+    \sigma scales the interfacial energy (set to 1 here)
+    F = int( sigma*eps*|grad(c)|^2 + 9*sigma*/eps * c^2 * (1-c)^2).
 
-    # The current implementation assumes isotropic voxels (dx=dy=dz).
-    # However, this could be easily changed.
+    The temporal evolution is given as
+    dc/dt = div( D*c*(1-c) \nabla ( 18*c*(1-c)*(1-2c) - 2*laplace(c) )) + f(t) .
+
+    The current implementation assumes isotropic voxels (dx=dy=dz).
+
+    Attributes:
+        fieldname: Field in the VoxelFields object to perform simulation with.
+        diffusivity: Constant diffusion coefficent [m^2/s].
+        epsilon: Parameter scaling the diffuse interface width [m]
+        device: device for storing torch tensors
+    """
 
     def __init__(self, data: VoxelFields, fieldname, diffusivity=1.0, epsilon=3, device='cuda'):
         """
         Solves the Cahn-Hilliard equation for two-phase system with double-well energy assuming periodic BC.
         """
-        super().__init__(data, device)
+        super().__init__(data, device=device)
         self.field = fieldname
         self.D = diffusivity
         self.eps = epsilon
         self.tensor = torch.tensor(data.fields[fieldname], dtype=self.precision, device=self.device)
+        # Precompute squares of inverse spacing
+        self.div_dx2 = 1/torch.tensor(self.spacing, dtype=self.precision, device=self.device)**2
 
     def handle_outputs(self, vtk_out, verbose, slice=0):
         self.data.fields[self.field] = self.tensor.squeeze().cpu().numpy()
         if np.isnan(self.data.fields[self.field]).any():
-            print(f"NaN detected in frame {self.frame}. Aborting simulation.")
+            print(f"NaN detected in frame {self.frame} at time {self.time}. Aborting simulation.")
             sys.exit(1)  # Exit the program with an error status
         if vtk_out:
             filename = self.field+f"_{self.frame:03d}.vtk"
             self.data.export_to_vtk(filename=filename, field_names=[self.field])
         if verbose == 'plot':
             clear_output(wait=True)
-            self.data.plot_slice(self.field, slice)
+            self.data.plot_slice(self.field, slice, time=self.time)
 
-    def calc_laplace(self, tensor):
-        padded = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
+    def pad_periodic(self, tensor):
+        return F.pad(tensor, (1,1,1,1,1,1), mode='circular')
+
+    def calc_laplace(self, padded):
         # Manual indexing is ~10x faster than conv3d with laplace kernel
-        self.laplace = padded[:, 2:, 1:-1, 1:-1] + \
-                       padded[:, :-2, 1:-1, 1:-1] + \
-                       padded[:, 1:-1, 2:, 1:-1] + \
-                       padded[:, 1:-1, :-2, 1:-1] + \
-                       padded[:, 1:-1, 1:-1, 2:] + \
-                       padded[:, 1:-1, 1:-1, :-2] - \
-                     6*padded[:, 1:-1, 1:-1, 1:-1]
+        self.laplace = (padded[:, 2:, 1:-1, 1:-1] + padded[:, :-2, 1:-1, 1:-1]) * self.div_dx2[0] + \
+                       (padded[:, 1:-1, 2:, 1:-1] + padded[:, 1:-1, :-2, 1:-1]) * self.div_dx2[1] + \
+                       (padded[:, 1:-1, 1:-1, 2:] + padded[:, 1:-1, 1:-1, :-2]) * self.div_dx2[2] - \
+                       2 * padded[:, 1:-1, 1:-1, 1:-1] * torch.sum(self.div_dx2)
 
-    def calc_divergence_variable_mobility(self, tensor):
-        padded_mu = F.pad(tensor, (1,1,1,1,1,1), mode='circular')
-        padded_c = F.pad(self.tensor, (1,1,1,1,1,1), mode='circular')
-        self.laplace = (padded_mu[:, 2:, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+    def calc_divergence_variable_mobility(self, padded_mu, padded_c):
+        self.laplace = ((padded_mu[:, 2:, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 2:, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 2:, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, :-2, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, :-2, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(padded_c[:, :-2, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))
+                       (1 - 0.5*(padded_c[:, :-2, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
+                       * self.div_dx2[0]
 
-        self.laplace += (padded_mu[:, 1:-1, 2:, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+        self.laplace += ((padded_mu[:, 1:-1, 2:, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 1:-1, 2:, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 1:-1, 2:, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, 1:-1, :-2, 1:-1]) *\
                        0.5*(padded_c[:, 1:-1, :-2, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(padded_c[:, 1:-1, :-2, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))
+                       (1 - 0.5*(padded_c[:, 1:-1, :-2, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
+                       * self.div_dx2[1]
 
-        self.laplace += (padded_mu[:, 1:-1, 1:-1, 2:] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+        self.laplace += ((padded_mu[:, 1:-1, 1:-1, 2:] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 1:-1, 1:-1, 2:] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 1:-1, 1:-1, 2:] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, :-2]) *\
                        0.5*(padded_c[:, 1:-1, 1:-1, :-2] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(padded_c[:, 1:-1, 1:-1, :-2] + padded_c[:, 1:-1, 1:-1, 1:-1]))
+                       (1 - 0.5*(padded_c[:, 1:-1, 1:-1, :-2] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
+                       * self.div_dx2[2]
 
     def solve(self, time_increment=0.01, frames=10, max_iters=1000, variable_m = True, verbose=True, vtk_out=True):
         """
-        Solves the Cahn-Hilliard equation using the specified numerical method.
+        Solves the Cahn-Hilliard equation using explicit timestepping.
         """
-        # Specific numerical implementation for Cahn-Hilliard equation
+        if self.device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device=self.device)
         self.n_out = int(max_iters/frames)
         self.frame = 0
+        self.time = 0
         self.tensor = self.tensor.unsqueeze(0)
         slice = int(self.tensor.shape[-1]/2)
-        torch.cuda.reset_peak_memory_stats()
-
         with torch.no_grad():
             start = timer()
             for i in range(max_iters):
                 if i % self.n_out == 0:
+                    self.time = i*time_increment
                     self.handle_outputs(vtk_out, verbose, slice=slice)
                     self.frame += 1
 
-                # Numerical increment
-                self.calc_laplace(self.tensor)
+                padded_c = self.pad_periodic(self.tensor)
+                self.calc_laplace(padded_c)
                 mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
+                padded_mu = self.pad_periodic(mu)
                 if variable_m:
-                    self.calc_divergence_variable_mobility(mu)
+                    self.calc_divergence_variable_mobility(padded_mu, padded_c)
                 else:
-                    self.calc_laplace(mu)
+                    self.calc_laplace(padded_mu)
                 self.tensor += time_increment * self.D * self.laplace
 
             end = timer()
+            self.time = max_iters*time_increment
             self.handle_outputs(vtk_out, verbose, slice=slice)
             if verbose:
-                self.print_GPU_stats(start, end, max_iters)
+                self.print_memory_stats(start, end, max_iters)
 
     def initialise_FFT_wavenumbers(self):
         Nx, Ny, Nz = self.tensor.shape
@@ -149,12 +176,14 @@ class CahnHilliardSolver(BaseSolver):
 
     def solve_FFT(self, time_increment=0.01, frames=10, max_iters=1000, variable_m = True, A = 0.25, verbose=True, vtk_out=True):
         """
-        Solves the Cahn-Hilliard equation using the specified numerical method.
+        Solves the Cahn-Hilliard equation based on FFT and semi-implicit timestepping.
         """
-        torch.cuda.reset_peak_memory_stats()
+        if self.device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device=self.device)
         self.n_out = int(max_iters/frames)
         slice = int(self.tensor.shape[-1]/2)
         self.frame = 0
+        self.time = 0
         if variable_m:
             kx, ky, kz, k_squared = self.initialise_FFT_wavenumbers()
         else:
@@ -164,6 +193,7 @@ class CahnHilliardSolver(BaseSolver):
             start = timer()
             for i in range(max_iters):
                 if i % self.n_out == 0:
+                    self.time = i*time_increment
                     self.handle_outputs(vtk_out, verbose, slice=slice)
                     self.frame += 1
 
@@ -188,9 +218,10 @@ class CahnHilliardSolver(BaseSolver):
                 self.tensor = torch.real(fft.ifftn(c_hat))
 
             end = timer()
+            self.time = max_iters*time_increment
             self.handle_outputs(vtk_out, verbose, slice=slice)
             if verbose:
-                self.print_GPU_stats(start, end, max_iters)
+                self.print_memory_stats(start, end, max_iters)
 
 
 class CahnHilliard4PhaseSolver(BaseSolver):
@@ -205,7 +236,7 @@ class CahnHilliard4PhaseSolver(BaseSolver):
         """
         self.phase_count = 4
 
-        super().__init__(data, device)
+        super().__init__(data, device=device)
         if not isinstance(field_names, (list, tuple)) or len(field_names) != self.phase_count:
             raise ValueError(f"field_names must be a list or tuple with {self.phase_count} elements.")
         if not all(isinstance(x, str) for x in field_names):
@@ -256,7 +287,7 @@ class CahnHilliard4PhaseSolver(BaseSolver):
         for i, name in enumerate(self.field_names):
             self.data.fields[name] = self.c[i].squeeze().cpu().numpy()
             if np.isnan(self.data.fields[name]).any():
-                print(f"NaN detected in frame {self.frame}. Aborting simulation.")
+                print(f"NaN detected in frame {self.frame} at time {self.time}. Aborting simulation.")
                 sys.exit(1)  # Exit the program with an error status
         if vtk_out:
             filename = f"4phase_CH_{self.frame:03d}.vtk"
@@ -274,7 +305,8 @@ class CahnHilliard4PhaseSolver(BaseSolver):
         self.n_out = int(max_iters/frames)
         self.frame = 0
         slice = int(self.data.Nx/2)
-        torch.cuda.reset_peak_memory_stats()
+        if self.device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device=self.device)
 
         with torch.no_grad():
             start = timer()
@@ -341,7 +373,7 @@ class CahnHilliard4PhaseSolver(BaseSolver):
             end = timer()
             self.handle_outputs(vtk_out, verbose, slice=slice)
             if verbose:
-                self.print_GPU_stats(start, end, max_iters)
+                self.print_memory_stats(start, end, max_iters)
 
     def initialise_FFT_wavenumbers(self):
         Nx, Ny, Nz = self.data.Nx, self.data.Ny, self.data.Nz
@@ -362,7 +394,8 @@ class CahnHilliard4PhaseSolver(BaseSolver):
         """
         Solves the Cahn-Hilliard equation using the specified numerical method.
         """
-        torch.cuda.reset_peak_memory_stats()
+        if self.device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device=self.device)
         self.n_out = int(max_iters/frames)
         self.frame = 0
         slice = int(self.data.Nx/2)
@@ -418,4 +451,4 @@ class CahnHilliard4PhaseSolver(BaseSolver):
             end = timer()
             self.handle_outputs(vtk_out, verbose, slice=slice)
             if verbose:
-                self.print_GPU_stats(start, end, max_iters)
+                self.print_memory_stats(start, end, max_iters)
