@@ -84,7 +84,7 @@ class VoxelFields:
                 if array.shape == (self.Nx, self.Ny, self.Nz):
                     self.fields[name] = array
                 else:
-                    raise ValueError(f"The provided array must have the shape ({self.num_x}, {self.num_y}, {self.num_z}).")
+                    raise ValueError(f"The provided array must have the shape ({self.Nx}, {self.Ny}, {self.Nz}).")
             else:
                 raise TypeError("The provided array must be a numpy array.")
         else:
@@ -112,7 +112,7 @@ class VoxelFields:
         grid = pv.ImageData()
         grid.dimensions = (self.Nx + 1, self.Ny + 1, self.Nz + 1)
         grid.spacing = self.spacing
-        grid.origin = self.origin
+        grid.origin = (self.origin[0] - self.spacing[0]/2, self.origin[1] - self.spacing[1]/2, self.origin[2] - self.spacing[2]/2)
 
         names = field_names if field_names else list(self.fields.keys())
         for name in names:
