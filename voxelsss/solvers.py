@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 from timeit import default_timer as timer
+import psutil
 import torch
 import torch.fft as fft
 import torch.nn.functional as F
