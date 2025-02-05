@@ -25,7 +25,12 @@ class BaseSolver:
         if torch.device(device).type.startswith('cuda') and not torch.cuda.is_available():
             self.device = torch.device('cpu')
             warnings.warn("CUDA not available, defaulting device to cpu. To avoid this warning, set device=torch.device('cpu')")
-        self.precision = torch.float32
+
+        if data.precision == np.float32:
+            self.precision = torch.float32
+        if data.precision == np.float64:
+            self.precision = torch.float64
+        
         self.spacing = data.spacing
         self.grid = None
         self.frame = 0
@@ -99,13 +104,14 @@ class CahnHilliardSolver(BaseSolver):
 
     def calc_laplace(self, padded):
         # Manual indexing is ~10x faster than conv3d with laplace kernel
-        self.laplace = (padded[:, 2:, 1:-1, 1:-1] + padded[:, :-2, 1:-1, 1:-1]) * self.div_dx2[0] + \
-                       (padded[:, 1:-1, 2:, 1:-1] + padded[:, 1:-1, :-2, 1:-1]) * self.div_dx2[1] + \
-                       (padded[:, 1:-1, 1:-1, 2:] + padded[:, 1:-1, 1:-1, :-2]) * self.div_dx2[2] - \
-                       2 * padded[:, 1:-1, 1:-1, 1:-1] * torch.sum(self.div_dx2)
+        laplace = (padded[:, 2:, 1:-1, 1:-1] + padded[:, :-2, 1:-1, 1:-1]) * self.div_dx2[0] + \
+                  (padded[:, 1:-1, 2:, 1:-1] + padded[:, 1:-1, :-2, 1:-1]) * self.div_dx2[1] + \
+                  (padded[:, 1:-1, 1:-1, 2:] + padded[:, 1:-1, 1:-1, :-2]) * self.div_dx2[2] - \
+                   2 * padded[:, 1:-1, 1:-1, 1:-1] * torch.sum(self.div_dx2)
+        return laplace
 
     def calc_divergence_variable_mobility(self, padded_mu, padded_c):
-        self.laplace = ((padded_mu[:, 2:, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+        divergence = ((padded_mu[:, 2:, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 2:, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 2:, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, :-2, 1:-1, 1:-1]) *\
@@ -113,7 +119,7 @@ class CahnHilliardSolver(BaseSolver):
                        (1 - 0.5*(padded_c[:, :-2, 1:-1, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
                        * self.div_dx2[0]
 
-        self.laplace += ((padded_mu[:, 1:-1, 2:, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+        divergence += ((padded_mu[:, 1:-1, 2:, 1:-1] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 1:-1, 2:, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 1:-1, 2:, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, 1:-1, :-2, 1:-1]) *\
@@ -121,13 +127,14 @@ class CahnHilliardSolver(BaseSolver):
                        (1 - 0.5*(padded_c[:, 1:-1, :-2, 1:-1] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
                        * self.div_dx2[1]
 
-        self.laplace += ((padded_mu[:, 1:-1, 1:-1, 2:] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
+        divergence += ((padded_mu[:, 1:-1, 1:-1, 2:] - padded_mu[:, 1:-1, 1:-1, 1:-1]) *\
                        0.5*(padded_c[:, 1:-1, 1:-1, 2:] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 1:-1, 1:-1, 2:] + padded_c[:, 1:-1, 1:-1, 1:-1])) - \
                        (padded_mu[:, 1:-1, 1:-1, 1:-1] - padded_mu[:, 1:-1, 1:-1, :-2]) *\
                        0.5*(padded_c[:, 1:-1, 1:-1, :-2] + padded_c[:, 1:-1, 1:-1, 1:-1]) * \
                        (1 - 0.5*(padded_c[:, 1:-1, 1:-1, :-2] + padded_c[:, 1:-1, 1:-1, 1:-1]))) \
                        * self.div_dx2[2]
+        return divergence
 
     def solve(self, time_increment=0.01, frames=10, max_iters=1000, variable_m = True, verbose=True, vtk_out=True):
         """
@@ -149,14 +156,14 @@ class CahnHilliardSolver(BaseSolver):
                     self.frame += 1
 
                 padded_c = self.pad_periodic(self.tensor)
-                self.calc_laplace(padded_c)
-                mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*self.laplace
+                laplace = self.calc_laplace(padded_c)
+                mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*laplace
                 padded_mu = self.pad_periodic(mu)
                 if variable_m:
-                    self.calc_divergence_variable_mobility(padded_mu, padded_c)
+                    divergence = self.calc_divergence_variable_mobility(padded_mu, padded_c)
                 else:
-                    self.calc_laplace(padded_mu)
-                self.tensor += time_increment * self.D * self.laplace
+                    divergence = self.calc_laplace(padded_mu)
+                self.tensor += time_increment * self.D * divergence
 
             end = timer()
             self.time = max_iters*time_increment
@@ -214,6 +221,48 @@ class CahnHilliardSolver(BaseSolver):
                 else:
                     # Update c_hat using semi-implicit scheme
                     c_hat = (fft.fftn(self.tensor) - time_increment*self.D*k_squared*fft.fftn(dfhom_dc)) / (1 + 2*self.eps*time_increment*self.D*k_squared**2)
+
+                # Transform back to real space
+                self.tensor = torch.real(fft.ifftn(c_hat))
+
+            end = timer()
+            self.time = max_iters*time_increment
+            self.handle_outputs(vtk_out, verbose, slice=slice)
+            if verbose:
+                self.print_memory_stats(start, end, max_iters)
+
+    def solve_FFT2(self, time_increment=0.01, frames=10, max_iters=1000, A = 0.25, verbose=True, vtk_out=True):
+        """
+        Solves the Cahn-Hilliard equation using the specified numerical method.
+        """
+        if self.device.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(device=self.device)
+        self.n_out = int(max_iters/frames)
+        slice = int(self.tensor.shape[-1]/2)
+        self.frame = 0
+        self.time = 0
+        _, _, _, k_squared = self.initialise_FFT_wavenumbers()
+        self.tensor = self.tensor.unsqueeze(0)
+
+        with torch.no_grad():
+            start = timer()
+            for i in range(max_iters):
+                if i % self.n_out == 0:
+                    self.time = i*time_increment
+                    self.handle_outputs(vtk_out, verbose, slice=slice)
+                    self.frame += 1
+
+                padded_c = self.pad_periodic(self.tensor)
+                laplace = self.calc_laplace(padded_c)
+                mu = 18/self.eps*self.tensor*(1-self.tensor)*(1-2*self.tensor) - 2*self.eps*laplace
+                padded_mu = self.pad_periodic(mu)
+                divergence = self.calc_divergence_variable_mobility(padded_mu, padded_c)
+                divergence *= self.D
+                flux_div = fft.fftn(divergence)
+
+                c_hat = fft.fftn(self.tensor)
+                # Update c_hat using semi-implicit scheme
+                c_hat += time_increment*flux_div / (1 + 2*self.eps*time_increment*self.D*k_squared**2*A)
 
                 # Transform back to real space
                 self.tensor = torch.real(fft.ifftn(c_hat))

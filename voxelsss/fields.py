@@ -52,6 +52,7 @@ class VoxelFields:
         self.Nx = num_x
         self.Ny = num_y
         self.Nz = num_z
+        self.precision = np.float32 #np.float64
 
         if not isinstance(domain_size, (list, tuple)) or len(domain_size) != 3:
             raise ValueError("spacing must be a list or tuple with three elements (dx, dy, dz)")
@@ -95,9 +96,9 @@ class VoxelFields:
         Creates the meshgrid for a regular voxel grid layout if it doesn't already exist.
         """
         if self.grid is None:
-            x_lin = np.arange(0, self.Nx, dtype=np.float32) * self.spacing[0] + self.origin[0]
-            y_lin = np.arange(0, self.Ny, dtype=np.float32) * self.spacing[1] + self.origin[1]
-            z_lin = np.arange(0, self.Nz, dtype=np.float32) * self.spacing[2] + self.origin[2]
+            x_lin = np.arange(0, self.Nx, dtype=self.precision) * self.spacing[0] + self.origin[0]
+            y_lin = np.arange(0, self.Ny, dtype=self.precision) * self.spacing[1] + self.origin[1]
+            z_lin = np.arange(0, self.Nz, dtype=self.precision) * self.spacing[2] + self.origin[2]
             x, y, z = np.meshgrid(x_lin, y_lin, z_lin, indexing='ij')
             self.grid = (x, y, z)
 
