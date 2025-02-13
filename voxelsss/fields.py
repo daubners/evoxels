@@ -46,7 +46,7 @@ class VoxelFields:
         Initializes the voxel grid with specified dimensions and domain size.
 
         Raises:
-            ValueError: If spacing is not a list or tuple with three elements or contains non-numeric values.
+            ValueError: If domain_size is not a list or tuple with three elements or contains non-numeric values.
             Warning: If spacings differ significantly, a warning is issued.
         """
         self.Nx = num_x
@@ -55,7 +55,7 @@ class VoxelFields:
         self.precision = np.float32 #np.float64
 
         if not isinstance(domain_size, (list, tuple)) or len(domain_size) != 3:
-            raise ValueError("spacing must be a list or tuple with three elements (dx, dy, dz)")
+            raise ValueError("domain_size must be a list or tuple with three elements (dx, dy, dz)")
         if not all(isinstance(x, (int, float)) for x in domain_size):
             raise ValueError("All elements in domain_size must be integers or floats")
         self.domain_size = domain_size
