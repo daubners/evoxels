@@ -1,7 +1,7 @@
 # voxelsss (voxel-based structure simulation solvers)
 
 <p align="center">
-  <img src="voxelsss.png" width="50%"></img>
+  <img src="voxelsss-graphical.png" width="70%"></img>
 </p>
 
 ```
@@ -15,6 +15,9 @@ Rivers flow in blocky streaks.
 So embrace the charm of this edgy place,
 Where every voxel finds its space
 ```
+## Vision
+
+This package provides a unified voxel-based framework that integrates segmented 3D microscopy data, physical simulations, inverse modeling, and machine learning - without any mesh generation. It represents microstructures as dense PyTorch tensors (e.g. $200^3$–$500^3$ voxels) and leverages GPU/CPU-parallel FFT kernels for advanced time stepping schemes applied to phase-field, reaction-diffusion, and transport simulations. By operating entirely within PyTorch’s autodiff graph, it enables end-to-end gradient-based parameter estimation and surrogate training straight from image data. Advanced FFT-based solvers and low-RAM in-place updates scale to hundreds of millions of cells on commodity hardware.
 
 ## Description
 
@@ -23,7 +26,7 @@ Basic attributes are the grid size (Nx, Ny, Nz), the length of physical domain (
 The class comes with some comfort features like adding a corresponding meshgrid, plotting slices, interactive plotting of the whole 3D structure and data export to vtk for further visualization.
 
 The solvers are currently under development.
-At this stage, the binary Cahn-Hilliard solver can be used as a reference for computational performance. Especially the ``solve_FFT`` achieves high computational performance thanks to optimized time-stepping in combination with fast matrix operations from pytorch.
+At this stage, the binary Cahn-Hilliard solver can be used as a reference for computational performance. Especially the ``method = 'mixed_FFT'`` achieves high computational performance thanks to optimized time-stepping in combination with fast matrix operations from pytorch.
 
 ## Installation
 
@@ -58,9 +61,9 @@ vf.add_field("c", noise)
 dt = 0.1
 final_time = 100
 iter = int(final_time/dt)
-
-sim = vox.CahnHilliardSolver(vf, "c", device='cuda')
-sim.solve_FFT(time_increment=dt, max_iters=iter, frames=10, verbose='plot', vtk_out=False)
+sim = vox.PeriodicCahnHilliardSolver(vf, "c", device='cuda')
+sim.solve(method='mixed_FFT', time_increment=dt, frames=10, max_iters=iter, \
+          verbose='plot', vtk_out=False, plot_bounds=(0,1))
 ```
 As the simulation is running, the "c" field will be overwritten each frame. Therefore, ``vf.fields["c"]`` will give you the last frame of the simulation. This code design has been chosen specifically for large data such that the RAM requirements are rather low.
 For visual inspection of your simulation results, you can plot individual slices (e.g. slice=10) for a given direction (e.g. x)
