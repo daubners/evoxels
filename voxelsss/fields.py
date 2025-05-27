@@ -22,7 +22,6 @@
 ### Dyson School of Design Engineering
 ### Imperial College London
 
-from IPython.display import clear_output
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
@@ -53,18 +52,25 @@ class VoxelFields:
         self.Ny = num_y
         self.Nz = num_z
         self.precision = np.float32 #np.float64
+        self.convention = convention
 
         if not isinstance(domain_size, (list, tuple)) or len(domain_size) != 3:
             raise ValueError("domain_size must be a list or tuple with three elements (dx, dy, dz)")
         if not all(isinstance(x, (int, float)) for x in domain_size):
             raise ValueError("All elements in domain_size must be integers or floats")
         self.domain_size = domain_size
-        self.spacing = (domain_size[0]/num_x, domain_size[1]/num_y, domain_size[2]/num_z)
+
+        if convention == 'cell_center':
+            self.spacing = (domain_size[0]/num_x, domain_size[1]/num_y, domain_size[2]/num_z)
+            self.origin = (self.spacing[0]/2, self.spacing[1]/2, self.spacing[2]/2)
+        elif convention == 'staggered_x':
+            self.spacing = (domain_size[0]/(num_x-1), domain_size[1]/num_y, domain_size[2]/num_z)
+            self.origin = (0, self.spacing[1]/2, self.spacing[2]/2)
+        else:
+            raise ValueError("Chosen convention must be cell_center or staggered_x.")
+
         if (np.max(self.spacing)/np.min(self.spacing) > 10):
             warnings.warn("Simulations become very questionable for largely different spacings e.g. dz >> dx.")
-        self.origin = (0, 0, 0)
-        if convention == 'cell_center':
-            self.origin = (self.spacing[0]/2, self.spacing[1]/2, self.spacing[2]/2)
         self.grid = None
         self.fields = {}
 
@@ -91,6 +97,17 @@ class VoxelFields:
         else:
             self.fields[name] = np.zeros((self.Nx, self.Ny, self.Nz))
 
+    def calc_field_average(self, name: str):
+        if self.convention == 'cell_center':
+            average = np.mean(self.fields[name])
+        elif self.convention == 'staggered_x':
+            # Count first and last slice as half cells
+            average = np.sum(self.fields[name][1:-1,:,:]) \
+                      + 0.5*np.sum(self.fields[name][ 0,:,:]) \
+                      + 0.5*np.sum(self.fields[name][-1,:,:])
+            average /= ((self.Nx-1) * self.Ny * self.Nz)
+        return average
+
     def add_grid(self):
         """
         Creates the meshgrid for a regular voxel grid layout if it doesn't already exist.
@@ -110,17 +127,18 @@ class VoxelFields:
             filename (str): Name of the output VTK file.
             field_names (list, optional): List of field names to export. Exports all fields if None.
         """
-        grid = pv.ImageData()
-        grid.dimensions = (self.Nx + 1, self.Ny + 1, self.Nz + 1)
-        grid.spacing = self.spacing
-        grid.origin = (self.origin[0] - self.spacing[0]/2, self.origin[1] - self.spacing[1]/2, self.origin[2] - self.spacing[2]/2)
-
         names = field_names if field_names else list(self.fields.keys())
+        grid = pv.ImageData()
+        grid.spacing = self.spacing
+        grid.dimensions = (self.Nx + 1, self.Ny + 1, self.Nz + 1)
+        grid.origin = (self.origin[0] - self.spacing[0]/2, \
+                        self.origin[1] - self.spacing[1]/2, \
+                        self.origin[2] - self.spacing[2]/2)
         for name in names:
             grid.cell_data[name] = self.fields[name].flatten(order="F")  # Fortran order flattening
         grid.save(filename)
 
-    def plot_slice(self, fieldname, slice_index, direction='z', time=None, colormap='viridis'):
+    def plot_slice(self, fieldname, slice_index, direction='z', time=None, colormap='viridis', value_bounds=None):
         """
         Plots a 2D slice of a field along a specified direction.
 
@@ -141,21 +159,31 @@ class VoxelFields:
         # gradual: turbo
         if direction == 'x':
             slice = np.s_[slice_index,:,:]
-            end1, end2 = self.domain_size[1], self.domain_size[2]
+            start1, start2 = self.origin[1]-self.spacing[1]/2, self.origin[2]-self.spacing[2]/2
+            end1, end2 = self.domain_size[1]-start1, self.domain_size[2]-start2
             label1, label2 = ['Y', 'Z']
         elif direction == 'y':
             slice = np.s_[:,slice_index,:]
-            end1, end2 = self.domain_size[0], self.domain_size[2]
+            start1, start2 = self.origin[0]-self.spacing[0]/2, self.origin[2]-self.spacing[2]/2
+            end1, end2 = self.domain_size[0]-start1, self.domain_size[2]-start2
             label1, label2 = ['X', 'Z']
         elif direction == 'z':
             slice = np.s_[:,:,slice_index]
-            end1, end2 = self.domain_size[0], self.domain_size[1]
+            start1, start2 = self.origin[0]-self.spacing[0]/2, self.origin[1]-self.spacing[1]/2
+            end1, end2 = self.domain_size[0]-start1, self.domain_size[1]-start2
             label1, label2 = ['X', 'Y']
         else:
             raise ValueError("Given direction must be x, y or z")
 
         plt.figure()
-        im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap, origin='lower', extent=[0, end1, 0, end2])
+        if value_bounds is not None:
+            im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap,\
+                            origin='lower', extent=[start1, end1, start2, end2],\
+                                vmin=value_bounds[0], vmax=value_bounds[1])
+        else:
+            im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap, \
+                            origin='lower', extent=[start1, end1, start2, end2])
+
         plt.colorbar(im)
         plt.xlabel(label1)
         plt.ylabel(label2)
@@ -165,7 +193,7 @@ class VoxelFields:
             plt.title(f'Slice {slice_index} of {fieldname} in {direction}')
         plt.show()
 
-    def plot_field_interactive(self, fieldname, direction='x', colormap='viridis'):
+    def plot_field_interactive(self, fieldname, direction='x', colormap='viridis', value_bounds=None):
         """
         Creates an interactive plot for exploring slices of a 3D field.
 
@@ -180,23 +208,24 @@ class VoxelFields:
         """
         if direction == 'x':
             axes = (0,1,2)
-            end1, end2 = self.spacing[1], self.spacing[2]
+            end1, end2 = self.domain_size[1], self.domain_size[2]
             label1, label2 = ['Y', 'Z']
         elif direction == 'y':
             axes = (1,0,2)
-            end1, end2 = self.spacing[0], self.spacing[2]
+            end1, end2 = self.domain_size[0], self.domain_size[2]
             label1, label2 = ['X', 'Z']
         elif direction == 'z':
             axes = (2,0,1)
-            end1, end2 = self.spacing[0], self.spacing[1]
+            end1, end2 = self.domain_size[0], self.domain_size[1]
             label1, label2 = ['X', 'Y']
         else:
             raise ValueError("Given direction must be x, y or z")
 
         field = np.transpose(self.fields[fieldname], axes)
-        max_id = np.max(np.unique(field))
         fig, ax = plt.subplots()
-        im = ax.imshow(field[0].T, cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=0, vmax=max_id)
+        if value_bounds is None:
+            value_bounds = (np.min(field), np.max(field))
+        im = ax.imshow(field[0].T, cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=value_bounds[0], vmax=value_bounds[1])
         ax.set_xlabel(label1)
         ax.set_ylabel(label2)
         ax.set_title(f'Slice 0 in {direction}-direction of {fieldname}')
