@@ -17,7 +17,7 @@ Where every voxel finds its space
 ```
 ## Vision
 
-This package provides a unified voxel-based framework that integrates segmented 3D microscopy data, physical simulations, inverse modeling, and machine learning - without any mesh generation. It represents microstructures as dense PyTorch tensors (e.g. $200^3$–$500^3$ voxels) and leverages GPU/CPU-parallel FFT kernels for advanced time stepping schemes applied to phase-field, reaction-diffusion, and transport simulations. By operating entirely within PyTorch’s autodiff graph, it enables end-to-end gradient-based parameter estimation and surrogate training straight from image data. Advanced FFT-based solvers and low-RAM in-place updates scale to hundreds of millions of cells on commodity hardware.
+This package provides a unified voxel-based framework that integrates segmented 3D microscopy data, physical simulations, inverse modeling, and machine learning - without any mesh generation. It represents microstructures as dense PyTorch tensors (e.g. $200^3$ - $1000^3$ voxels) and leverages GPU/CPU-parallel FFT kernels for advanced time stepping schemes applied to phase-field, reaction-diffusion, and transport simulations. By operating entirely within PyTorch’s autodiff graph, it enables end-to-end gradient-based parameter estimation and surrogate training straight from image data. Advanced FFT-based solvers and low-RAM in-place updates scale to hundreds of millions of cells on commodity hardware.
 
 ## Description
 
