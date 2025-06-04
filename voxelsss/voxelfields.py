@@ -18,15 +18,12 @@
 # Also lass dich vom Charme dieses kantigen Ortes verzaubern,
 # wo jedes Voxel seinen Platz findet.
 
-### Simon Daubner (s.daubner@imperial.ac.uk)
-### Dyson School of Design Engineering
-### Imperial College London
-
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
-import pyvista as pv
+from typing import Tuple
 import warnings
+from .voxelgrid import Grid
 
 class VoxelFields:
     """
@@ -74,6 +71,13 @@ class VoxelFields:
         self.grid = None
         self.fields = {}
 
+    def __str__(self):
+        return f"Domain with size {self.domain_size} and {(self.Nx, self.Ny, self.Nz)} grid points on {self.convention} position."
+
+    def grid_info(self):
+        grid = Grid((self.Nx, self.Ny, self.Nz), self.origin, self.spacing, self.convention)
+        return grid
+
     def add_field(self, name: str, array=None):
         """
         Adds a field to the voxel grid.
@@ -107,17 +111,25 @@ class VoxelFields:
                       + 0.5*np.sum(self.fields[name][-1,:,:])
             average /= ((self.Nx-1) * self.Ny * self.Nz)
         return average
-
-    def add_grid(self):
-        """
-        Creates the meshgrid for a regular voxel grid layout if it doesn't already exist.
-        """
-        if self.grid is None:
-            x_lin = np.arange(0, self.Nx, dtype=self.precision) * self.spacing[0] + self.origin[0]
-            y_lin = np.arange(0, self.Ny, dtype=self.precision) * self.spacing[1] + self.origin[1]
-            z_lin = np.arange(0, self.Nz, dtype=self.precision) * self.spacing[2] + self.origin[2]
-            x, y, z = np.meshgrid(x_lin, y_lin, z_lin, indexing='ij')
-            self.grid = (x, y, z)
+    
+    # TODO: not sure if those are needed here or should fully live
+    #       in the backends (voxelgrid.py)
+    # INFO: used for testing at the moment
+    def axes(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """ Returns the 1D coordinate arrays along each axis. """
+        return tuple(
+            np.arange(0, n, dtype=self.precision) * self.spacing[i] + self.origin[i]
+            for i, n in enumerate((self.Nx, self.Ny, self.Nz))
+        )
+    
+    # TODO: not sure if those are needed here or should fully live
+    #       in the backends (voxelgrid.py)
+    # INFO: used for testing at the moment
+    def meshgrid(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """ Returns full 3D mesh grids for each axis. """
+        ax = self.axes()
+        # indexing='ij' makes Ax[i,j,k] = x-coordinate at (i,j,k), etc.
+        return tuple(np.meshgrid(*ax, indexing='ij'))
 
     def export_to_vtk(self, filename="output.vtk", field_names=None):
         """
@@ -127,6 +139,7 @@ class VoxelFields:
             filename (str): Name of the output VTK file.
             field_names (list, optional): List of field names to export. Exports all fields if None.
         """
+        import pyvista as pv
         names = field_names if field_names else list(self.fields.keys())
         grid = pv.ImageData()
         grid.spacing = self.spacing
