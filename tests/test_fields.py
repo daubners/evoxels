@@ -13,13 +13,17 @@ def test_voxelFields_init_domain():
     sim = vox.VoxelFields(N, N, N, (N,N,N))
     assert (sim.domain_size, sim.spacing) == ((N, N, N),(1, 1, 1))
 
-def test_voxelFields_init_grid():
-    N = 10
-    sim = vox.VoxelFields(N, N, N, (N,N,N))
-    sim.add_grid()
-    (x,y,z) = sim.grid
+def test_voxelFields_grid_cell_centered():
+    Nx, Ny, Nz = 10, 5, 7
+    sim = vox.VoxelFields(Nx,Ny,Nz, (Nx,Ny,Nz))
+    (x,y,z) = sim.meshgrid()
+    assert x[-1,0,0] == Nx-sim.spacing[0]/2
 
-    assert x[-1,0,0] == N-sim.spacing[0]/2
+def test_voxelFields_grid_staggered_x():
+    Nx, Ny, Nz = 10, 5, 7
+    sim = vox.VoxelFields(Nx+1, Ny, Nz, (Nx,Ny,Nz), convention='staggered_x')
+    (x,y,z) = sim.meshgrid()
+    assert (x[-1,0,0] == Nx) and (y[0,-1,0] == Ny-sim.spacing[1]/2)
 
 def test_voxelFields_init_fields():
     N = 10
