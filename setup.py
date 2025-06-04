@@ -6,6 +6,7 @@ requirements = [
     'psutil>=5.9',
     "torch>=2.1",
     "pyvista>=0.39",
+    'ipython>=7.0.0'
 ]
 
 setup(
