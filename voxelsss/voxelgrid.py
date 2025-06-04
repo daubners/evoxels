@@ -1,10 +1,11 @@
 import numpy as np
 import warnings
 from dataclasses import dataclass
-from typing import Tuple, Any, Callable
+from typing import Tuple, Any
 
 # Shorthand for all elements [:] in slicing logic
 __ = slice(None)
+
 
 @dataclass
 class Grid:
@@ -13,6 +14,7 @@ class Grid:
     origin: Tuple[float, float, float]
     spacing: Tuple[float, float, float]
     convention: str
+
 
 @dataclass
 class VoxelGrid:
@@ -195,9 +197,13 @@ class VoxelGrid:
         laplace = self.pad_zeros(laplace)
         return laplace
 
+
 class VoxelGridTorch(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32', device: str='cuda'):
-        import torch
+        try:
+            import torch
+        except ImportError:
+            raise ImportError("PyTorch backend selected but 'torch' is not installed.")
         self.torch = torch
 
         # Handle torch device
@@ -217,56 +223,80 @@ class VoxelGridTorch(VoxelGrid):
 
     def to_backend(self, np_arr):
         return self.torch.tensor(np_arr, dtype=self.precision, device=self.device)
+
     def to_numpy(self, field):
         return field.cpu().numpy()
+
     def pad_periodic(self, field):
         return self.torch.nn.functional.pad(field, (1,1,1,1,1,1), mode='circular')
+
     def pad_zeros(self, field):
         return self.torch.nn.functional.pad(field, (1,1,1,1,1,1), mode='constant', value=0)
+
     def fftn(self, field):
         return self.torch.fft.fftn(field)
+
     def rfftn(self, field):
         return self.torch.fft.rfftn(field)
+
     def irfftn(self, field, shape):
         return self.torch.fft.irfftn(field, s=shape)
+
     def real_of_ifftn(self, field):
         return self.torch.real(self.torch.fft.ifftn(field))
+
     def expand_dim(self, field, dim):
         return field.unsqueeze(dim)
+
     def squeeze(self, field, dim):
         return self.torch.squeeze(field, dim)
+
     def set(self, field, index, value):
         field[index] = value
         return field
 
+
 class VoxelGridJax(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32'):
-        import jax.numpy as jnp
+        try:
+            import jax.numpy as jnp
+        except ImportError:
+            raise ImportError("JAX backend selected but 'jax' is not installed.")
         self.jnp = jnp
         self.precision = precision
         super().__init__(grid, jnp)
 
     def to_backend(self, np_arr):
         return self.jnp.array(np_arr, dtype=self.precision)
+
     def to_numpy(self, field):
         return np.array(field)
+
     def pad_periodic(self, field):
         pad_width = ((0, 0), (1, 1), (1, 1), (1, 1))
         return self.jnp.pad(field, pad_width, mode='wrap')
+
     def pad_zeros(self, field):
         pad_width = ((0, 0), (1, 1), (1, 1), (1, 1))
         return self.jnp.pad(field, pad_width, mode='constant', constant_values=0)
+
     def fftn(self, field):
         return self.jnp.fft.fftn(field)
+
     def rfftn(self, field):
         return self.jnp.fft.rfftn(field)
+
     def irfftn(self, field, shape):
         return self.jnp.fft.irfftn(field, s=shape)
+
     def real_of_ifftn(self, field):
         return self.jnp.fft.ifftn(field).real
+
     def expand_dim(self, field, dim):
         return self.jnp.expand_dims(field, dim)
+
     def squeeze(self, field, dim):
         return self.jnp.squeeze(field, axis=dim)
+
     def set(self, field, index, value):
         return field.at[index].set(value)

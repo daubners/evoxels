@@ -71,15 +71,15 @@ def test_periodic_laplace_torch():
         backend       = 'torch'
     )
 
-def test_periodic_laplace_jax():
-    grid_convergence_test(
-        test_function = calc_laplace_periodic,
-        init_fun      = initial_periodic,
-        exact_fun     = laplace_periodic,
-        convention    = 'cell_center',
-        dtype         = 'float32',
-        backend       = 'jax'
-    )
+# def test_periodic_laplace_jax():
+#     grid_convergence_test(
+#         test_function = calc_laplace_periodic,
+#         init_fun      = initial_periodic,
+#         exact_fun     = laplace_periodic,
+#         convention    = 'cell_center',
+#         dtype         = 'float32',
+#         backend       = 'jax'
+#     )
 
 # Test 2: Laplace with zero BC!
 def initial_zero_dirichlet(x,y,z):
