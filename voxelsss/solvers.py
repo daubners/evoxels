@@ -1,5 +1,5 @@
 from IPython.display import clear_output
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Any, Type
 from timeit import default_timer as timer
 import sys

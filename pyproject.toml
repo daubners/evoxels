@@ -1,3 +1,59 @@
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxelsss"
+version = "0.1.0"
+description = "Voxel-based structure simulation solvers"
+authors = [
+    { name = "Simon Daubner", email = "s.daubner@imperial.ac.uk" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Environment :: GPU",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
+]
+dependencies = [
+    "numpy>=1.21",
+    "matplotlib>=3.4",
+    "pyvista>=0.38",
+    "psutil>=5.9.0",
+    "ipython>=7.0.0"
+]
+
+[project.optional-dependencies]
+torch = [
+    "torch>=2.1"
+]
+jax = [
+    "jax>=0.4.14",
+    "jaxlib>=0.4.14"
+]
+dev = [
+    "pytest",
+    "flake8"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["voxelsss*"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]

@@ -1,6 +1,6 @@
 from ..problem_definition import PeriodicCahnHilliard
 from ..solvers import OneVariableTimeDependendSolver
-from ..timesteppers import forward_euler, pseudo_spectral_IMEX
+from ..timesteppers import pseudo_spectral_IMEX
 
 def run_cahn_hilliard_solver(
     voxelfields,
