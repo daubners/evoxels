@@ -2,7 +2,7 @@ from .problem_definition import ODE, SpectralODE
 from typing import TypeVar, Callable
 import diffrax as dfx
 import jax
-
+from .voxelgrid import VoxelGridJax
 State = TypeVar("State")
 TimeStepFn = Callable[[State], State]
 
@@ -31,7 +31,9 @@ def pseudo_spectral_IMEX(problem: SpectralODE, time_increment: float) -> TimeSte
 
 class SemiImplicitFourierSpectral(dfx.AbstractSolver):
 
-    problem: SpectralODE
+    spectral_factor: float
+    rfftn: Callable
+    irfftn: Callable
     term_structure = dfx.ODETerm
     interpolation_cls = dfx.LocalLinearInterpolation
 
@@ -45,12 +47,11 @@ class SemiImplicitFourierSpectral(dfx.AbstractSolver):
         del solver_state, made_jump
         δt = t1 - t0
         f0 = terms.vf(t0, y0, args)
-
         euler_y1 = y0 + δt * f0
-        tmp = 1.0 + self.A * δt * self.kappa * self.two_pi_i_k_4
-        # TODO: replace with problem.spectral_factor like Simon uses above
-        # if we decide to do this, this class should have an attribute for the SpectralODE
-        y1 = y0 + δt * self.ifft(self.fft(f0) / tmp).real
+        dc_fft = self.rfftn(f0)
+        dc_fft *= δt / (1.0 + self.spectral_factor * δt)
+        update = self.irfftn(dc_fft, f0.shape)
+        y1 = y0 + update
 
         y_error = y1 - euler_y1
         dense_info = dict(y0=y0, y1=y1)

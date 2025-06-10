@@ -59,7 +59,8 @@ class PeriodicCahnHilliard(SpectralODE):
         return divergence
 
     def rhs(self, c, t):
-        c = self.vg.apply_periodic_BC(c)
+
+        c = self.vg.apply_periodic_BC(self.vg.pad_with_ghost_nodes(c))
         laplace = self.vg.calc_laplace(c)
         mu = 18/self.eps*c*(1-c)*(1-2*c) - 2*self.eps*laplace
         mu = self.vg.apply_periodic_BC(mu)

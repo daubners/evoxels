@@ -105,7 +105,7 @@ class VoxelGrid:
     def init_field_from_numpy(self, array: np.ndarray):
         field = self.to_backend(array)
         field = self.expand_dim(field, 0)
-        field = self.pad_with_ghost_nodes(field)
+        # field = self.pad_with_ghost_nodes(field)
         return field
 
     def export_field_to_numpy(self, field):

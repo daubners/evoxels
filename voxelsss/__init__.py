@@ -8,3 +8,4 @@ from .precompiled_solvers import PeriodicCahnHilliardSolver, MixedCahnHilliardSo
 __all__.extend(['run_cahn_hilliard_solver', \
                 'PeriodicCahnHilliardSolver', \
                 'MixedCahnHilliardSolver'])
+from .inversion import CahnHilliardInversionModel
