@@ -107,6 +107,12 @@ class VoxelGrid:
         field = self.expand_dim(field, 0)
         # field = self.pad_with_ghost_nodes(field)
         return field
+    
+    def init_field_from_backend(self, array):
+        field = self.to_backend(array)
+        field = self.expand_dim(field, 0)
+        # field = self.pad_with_ghost_nodes(field)
+        return field
 
     def export_field_to_numpy(self, field):
         inner = self.squeeze(self.return_inner_values(field), 0)

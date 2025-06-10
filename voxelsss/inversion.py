@@ -1,10 +1,15 @@
 import diffrax as dfx
-import jax
 import jax.numpy as jnp
+import jax
+import numpy as np
+import equinox as eqx
+import optimistix as optx
+from functools import partial
 from .voxelfields import VoxelFields
 from .timesteppers import SemiImplicitFourierSpectral
 from .problem_definition import PeriodicCahnHilliard
 from .voxelgrid import VoxelGridJax
+
 
 class CahnHilliardInversionModel:
     def __init__(
@@ -23,11 +28,11 @@ class CahnHilliardInversionModel:
         self.eps, self.A = eps, A
 
     def solve(self, parameters, y0, saveat, adjoint=dfx.ForwardMode(), dt0=0.1):
-
-        vf = VoxelFields(self.Nx, self.Ny, self.Nz, domain_size=(self.Lx, self.Ly, self.Lz))
-        vf.add_field("c", y0)
+        vf = VoxelFields(
+            self.Nx, self.Ny, self.Nz, domain_size=(self.Lx, self.Ly, self.Lz)
+        )
         vg = VoxelGridJax(vf.grid_info())
-        u = vg.init_field_from_numpy(vf.fields["c"])
+        u = vg.init_field_from_backend(jnp.array(y0))
         problem = PeriodicCahnHilliard(vg, self.eps, parameters["D"], self.A)
 
         solver = SemiImplicitFourierSpectral(
@@ -48,153 +53,70 @@ class CahnHilliardInversionModel:
             throw=False,
             adjoint=adjoint,
         )
-        return solution.ys
+        return solution.ys[:,0]
 
-    # def residuals(self, parameters, y0s__values__saveat, adjoint=dfx.ForwardMode()):
-    #     y0s, values, saveat = y0s__values__saveat
-    #     solve_ = partial(self.solve, adjoint=adjoint)
-    #     batch_solve = eqx.filter_vmap(solve_, in_axes=(None, 0, None))
-    #     pred_values = batch_solve(parameters, y0s, saveat)
-    #     return values - pred_values[:, -1]
+    def residuals(self, parameters, y0s__values__saveat, adjoint=dfx.ForwardMode()):
+        y0s, values, saveat = y0s__values__saveat
+        solve_ = partial(self.solve, adjoint=adjoint)
+        batch_solve = jax.vmap(
+            solve_, in_axes=(None, 0, None)
+        )
+        pred_values = batch_solve(parameters, y0s, saveat)
+        return values - pred_values[:, 1:]
 
-    # def residuals_full_trajectory(
-    #     self, parameters, y0__values__saveat, adjoint=dfx.ForwardMode()
-    # ):
-    #     y0, values, saveat = y0__values__saveat
-    #     pred_values = self.solve(parameters, y0, saveat, adjoint=adjoint)
-    #     print(pred_values.shape)
-    #     print(values.shape)
-    #     return values - pred_values
+    def train(
+        self,
+        initial_parameters,
+        data,
+        inds,
+        adjoint=dfx.ForwardMode(),
+        rtol=1e-6,
+        atol=1e-6,
+        verbose=True,
+        max_steps=1000,
+    ):
+        
+        # Get length of first sequence to use as reference
+        ref_len = len(inds[0])
+        if ref_len < 2:
+            raise ValueError("Each sequence in inds must have at least 2 elements")
+            
+        # Get reference spacing from first sequence
+        ref_spacing = [inds[0][i+1] - inds[0][i] for i in range(ref_len-1)]
+        
+        # Validate all other sequences
+        for i, sequence in enumerate(inds):
+            if len(sequence) != ref_len:
+                raise ValueError(f"Sequence {i} has different length than first sequence")
+            
+            # Check spacing
+            spacing = [sequence[j+1] - sequence[j] for j in range(len(sequence)-1)]
+            if spacing != ref_spacing:
+                raise ValueError(f"Sequence {i} has different spacing than first sequence")
 
-    # def loss(
-    #     self,
-    #     parameters,
-    #     y0s__values__saveat__lambda__weights,
-    #     adjoint=dfx.ForwardMode(),
-    # ):
-    #     y0s, values, saveat, lambda_reg, weights = y0s__values__saveat__lambda__weights
-    #     return jnp.sum(
-    #         self.residuals(parameters, (y0s, values, saveat), adjoint) ** 2
-    #     ) + l2_regularization(parameters, lambda_reg, weights)
+        # TODO: make data a voxelgrid or voxelfield object
+        y0s = jnp.array([data["ys"][ind[0]] for ind in inds])
+        values = jnp.array([jnp.array([data["ys"][ind[i]] for i in range(1, len(ind))]) for ind in inds])
+        saveat = dfx.SaveAt(ts=jnp.array([0.0] + [data["ts"][inds[0][i]] - data["ts"][inds[0][0]] for i in range(1, len(inds[0]))]))
 
-    # def loss_full_trajectory(
-    #     self,
-    #     parameters,
-    #     y0__values__saveat__lambda__weights,
-    #     adjoint=dfx.ForwardMode(),
-    # ):
-    #     y0, values, saveat, lambda_reg, weights = y0__values__saveat__lambda__weights
-    #     return jnp.sum(
-    #         self.residuals_full_trajectory(parameters, (y0, values, saveat), adjoint)
-    #         ** 2
-    #     ) + l2_regularization(parameters, lambda_reg, weights)
+        args = (y0s, values, saveat)
+        residuals_ = partial(self.residuals, adjoint=adjoint)
 
-    # def train(self, config_path, data_input, inds, use_full_trajectory=False):
-    #     config = load_config(config_path)
-    #     data = data_input
+        solver = optx.LevenbergMarquardt(
+            rtol=rtol,
+            atol=atol,
+            verbose=frozenset(
+                {"step", "accepted", "loss", "step_size"} if verbose else None
+            ),
+        )
 
-    #     if use_full_trajectory:
-    #         # Use the first point as initial condition and all points for comparison
-    #         y0 = data["ys"][inds[0]]
-    #         values = data["ys"][inds]
-    #         print(data["ts"][np.array(inds)] - data["ts"][inds[0]])
-    #         saveat = dfx.SaveAt(ts=data["ts"][np.array(inds)] - data["ts"][inds[0]])
-    #         print(saveat)
-    #     else:
-    #         # Original approach: split into pairs of consecutive points
-    #         y0s = data["ys"][inds][:-1]
-    #         values = data["ys"][inds][1:]
-    #         saveat = dfx.SaveAt(
-    #             ts=jnp.array([0.0, data["ts"][inds[1]] - data["ts"][inds[0]]])
-    #         )
+        sol = optx.least_squares(
+            residuals_,
+            solver,
+            initial_parameters,
+            args=args,
+            max_steps=max_steps,
+            throw=False,
+        )
 
-    #     adjoint = (
-    #         dfx.RecursiveCheckpointAdjoint()
-    #         if config["adjoint"] == "reverse"
-    #         else dfx.ForwardMode()
-    #     )
-
-    #     if use_full_trajectory:
-    #         args = (
-    #             (y0, values, saveat)
-    #             if config["problem_type"] == "least_squares"
-    #             else (y0, values, saveat, config["lambda_reg"], config["weights"])
-    #         )
-    #         residuals_ = partial(self.residuals_full_trajectory, adjoint=adjoint)
-    #         loss_ = partial(self.loss_full_trajectory, adjoint=adjoint)
-    #     else:
-    #         args = (
-    #             (y0s, values, saveat)
-    #             if config["problem_type"] == "least_squares"
-    #             else (y0s, values, saveat, config["lambda_reg"], config["weights"])
-    #         )
-    #         residuals_ = partial(self.residuals, adjoint=adjoint)
-    #         loss_ = partial(self.loss, adjoint=adjoint)
-
-    #     # Check if using optax optimizer
-    #     if config.get("use_optax", False):
-    #         # Use optax optimizer (e.g., LBFGS)
-    #         optimizer = getattr(optax, config["optimizer"])
-    #         opt_config = config.get("optax_config", {})
-    #         opt = optimizer(**opt_config)
-
-    #         # Initialize optimizer state
-    #         opt_state = opt.init(self.parameters)
-
-    #         # Define value and gradient function
-    #         if config["problem_type"] == "least_squares":
-
-    #             def value_fn(params):
-    #                 residuals = residuals_(params, args)
-    #                 return jnp.sum(residuals**2)
-
-    #         else:
-    #             value_fn = lambda params: loss_(params, args)
-
-    #         value_and_grad_fn = jax.value_and_grad(value_fn)
-
-    #         # Optimization loop
-    #         params = self.parameters
-    #         best_params = params
-    #         best_loss = float("inf")
-
-    #         for step in range(config.get("max_steps", 100)):
-    #             value, grad = value_and_grad_fn(params)
-
-    #             if value < best_loss:
-    #                 best_loss = value
-    #                 best_params = params
-
-    #             updates, opt_state = opt.update(
-    #                 grad, opt_state, params, value=value, grad=grad, value_fn=value_fn
-    #             )
-    #             params = optax.apply_updates(params, updates)
-
-    #             if config.get("verbose", False) and step % 10 == 0:
-    #                 print(f"Step {step}, Loss: {value:.6e}")
-
-    #         self.parameters = best_params
-    #         return {"value": best_params, "state": {"loss": best_loss}}
-    #     else:
-    #         # Use optimistix optimizer (original implementation)
-    #         optimizer = getattr(optx, config["optimizer"])
-    #         solver = optimizer(
-    #             rtol=config["rtol"],
-    #             atol=config["atol"],
-    #             verbose=config["verbose"],
-    #         )
-    #         problem_type = getattr(optx, config["problem_type"])
-
-    #         sol = problem_type(
-    #             {"least_squares": residuals_, "minimise": loss_}[
-    #                 config["problem_type"]
-    #             ],
-    #             solver,
-    #             self.parameters,
-    #             options=config["options"],
-    #             args=args,
-    #             throw=config["throw"],
-    #             max_steps=config["max_steps"],
-    #         )
-    #         self.parameters = sol.value
-    #         return sol
+        return sol
