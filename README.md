@@ -1,3 +1,5 @@
+[![Python package](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml)
+
 # voxelsss (voxel-based structure simulation solvers)
 
 <p align="center">
