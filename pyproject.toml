@@ -46,7 +46,12 @@ jax = [
 ]
 dev = [
     "pytest",
-    "flake8"
+    "ruff"
+]
+notebooks = [
+    "ipywidgets",
+    "ipympl",
+    "notebook"
 ]
 
 [tool.setuptools.packages.find]
@@ -57,3 +62,6 @@ include = ["voxelsss*"]
 minversion = "6.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
+
+[tool.ruff]
+exclude = ["notebooks"]

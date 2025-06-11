@@ -1,3 +1,5 @@
+[![Python package](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml)
+
 # voxelsss (voxel-based structure simulation solvers)
 
 <p align="center">
@@ -31,18 +33,36 @@ At this stage, the binary Cahn-Hilliard solver can be used as a reference for co
 ## Installation
 
 Can be installed by cloning the repository
-
-`git clone git@github.com:daubners/voxelsss.git`
-
-and then locally installing in editable mode. Navigate to the voxelsss folder, then
-
-`pip install -e .`
-
-To utilize all plotting functionality in jupyter notebooks make sure to
 ```
-pip install ipywidgets
-pip install ipympl
+git clone git@github.com:daubners/voxelsss.git
 ```
+
+and then locally installing in editable mode.
+It is recommended to install the package inside a Python virtual environment so
+that the dependencies do not interfere with your system packages. Create and
+activate a virtual environment e.g. using miniconda
+
+```bash
+conda create --name myenv python=3.11
+conda activate myenv
+```
+Navigate to the voxelsss folder, then
+```
+pip install -e .[torch] # install with torch backend
+pip install -e .[jax]   # install with jax backend
+pip install -e .[torch, dev, notebooks] # also install testing and notebooks
+```
+To work with the example notebooks install Jupyter as well install all notebook related dependencies via
+```
+pip install -e .[notebooks]
+```
+Launch the notebooks with
+```
+jupyter notebook
+```
+If you are using VSCode open the Command Palette and select
+"Jupyter: Create New Blank Notebook" or open an existing notebook file.
+
 
 ## Usage
 

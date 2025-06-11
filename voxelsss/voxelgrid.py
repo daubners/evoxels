@@ -41,15 +41,41 @@ class VoxelGrid:
             self.apply_periodic_BC           = self.apply_periodic_BC_cell_center
     
     # Operate on fields
-    def to_backend(self, field):        raise NotImplementedError
-    def to_numpy(self, field):          raise NotImplementedError
-    def pad_periodic(self, field):      raise NotImplementedError
-    def pad_zeros(self, field):         raise NotImplementedError
-    def fftn(self, field):              raise NotImplementedError
-    def real_of_ifftn(self, field):     raise NotImplementedError
-    def expand_dim(self, field, dim):   raise NotImplementedError
-    def squeeze(self, field, dim):      raise NotImplementedError
-    def set(self, field, index, value): raise NotImplementedError
+    def to_backend(self, field):
+        """Convert a NumPy array to the backend representation."""
+        raise NotImplementedError
+
+    def to_numpy(self, field):
+        """Convert a backend array to ``numpy.ndarray``."""
+        raise NotImplementedError
+
+    def pad_periodic(self, field):
+        """Pad a field with periodic boundary conditions."""
+        raise NotImplementedError
+
+    def pad_zeros(self, field):
+        """Pad a field with zeros."""
+        raise NotImplementedError
+
+    def fftn(self, field):
+        """Compute the n-dimensional discrete Fourier transform."""
+        raise NotImplementedError
+
+    def real_of_ifftn(self, field):
+        """Return the real part of the inverse FFT."""
+        raise NotImplementedError
+
+    def expand_dim(self, field, dim):
+        """Add a singleton dimension to ``field``."""
+        raise NotImplementedError
+
+    def squeeze(self, field, dim):
+        """Remove ``dim`` from ``field``."""
+        raise NotImplementedError
+
+    def set(self, field, index, value):
+        """Set ``field[index]`` to ``value`` and return ``field``."""
+        raise NotImplementedError
     
     def axes(self) -> Tuple[Any, ...]:
         """ Returns the 1D coordinate arrays along each axis. """
@@ -89,6 +115,7 @@ class VoxelGrid:
         return kx**2 + ky**2 + kz**2
     
     def pad_with_ghost_nodes(self, field):
+        """Pad ``field`` and drop unused ghost nodes for staggered grids."""
         field = self.pad_periodic(field)
         if self.convention == 'staggered_x':
             # For staggered grid we don't need ghost nodes in x
@@ -96,6 +123,7 @@ class VoxelGrid:
         return field
     
     def return_inner_values(self, field):
+        """Return the values without ghost nodes."""
         if self.convention == 'staggered_x':
             inner_field = field[:,:,1:-1,1:-1]
         else :
@@ -103,6 +131,7 @@ class VoxelGrid:
         return inner_field
     
     def init_field_from_numpy(self, array: np.ndarray):
+        """Convert and pad a NumPy array for simulation."""
         field = self.to_backend(array)
         field = self.expand_dim(field, 0)
         # field = self.pad_with_ghost_nodes(field)
@@ -115,11 +144,13 @@ class VoxelGrid:
         return field
 
     def export_field_to_numpy(self, field):
+        """Export backend field back to NumPy without ghost nodes."""
         inner = self.squeeze(self.return_inner_values(field), 0)
         return self.to_numpy(inner)
     
     def calc_field_average(self, field):
         # TODO: this currently only works for batch dimension of 1
+        """Return the spatial average of ``field``."""
         inner_field = self.return_inner_values(field)
         if self.convention == 'cell_center':
             average = self.lib.mean(inner_field)
@@ -132,6 +163,7 @@ class VoxelGrid:
         return average
     
     def _apply_yz_periodic(self, field):
+        """Helper to apply periodic boundaries in y and z directions."""
         field = self.set(field, (__,__, 0,__), field[:,:,-2,:])
         field = self.set(field, (__,__,-1,__), field[:,:, 1,:])
         field = self.set(field, (__,__,__, 0), field[:,:,:,-2])
@@ -206,6 +238,13 @@ class VoxelGrid:
 
 class VoxelGridTorch(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32', device: str='cuda'):
+        """Create a torch backed grid.
+
+        Args:
+            grid: Grid description.
+            precision: Floating point precision.
+            device: Torch device string.
+        """
         try:
             import torch
         except ImportError:
@@ -214,9 +253,12 @@ class VoxelGridTorch(VoxelGrid):
 
         # Handle torch device
         self.device = torch.device(device)
-        if torch.device(device).type.startswith('cuda') and not torch.cuda.is_available():
-            self.device = torch.device('cpu')
-            warnings.warn("CUDA not available, defaulting device to cpu. To avoid this warning, set device=torch.device('cpu')")
+        if torch.device(device).type.startswith("cuda") and not torch.cuda.is_available():
+            self.device = torch.device("cpu")
+            warnings.warn(
+                "CUDA not available, defaulting device to cpu. "
+                "To avoid this warning, set device=torch.device('cpu')",
+            )
         torch.set_default_device(self.device)
 
         # Handle torch precision
@@ -264,6 +306,12 @@ class VoxelGridTorch(VoxelGrid):
 
 class VoxelGridJax(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32'):
+        """Create a JAX backed grid.
+
+        Args:
+            grid: Grid description.
+            precision: Floating point precision for arrays.
+        """
         try:
             import jax.numpy as jnp
         except ImportError:
