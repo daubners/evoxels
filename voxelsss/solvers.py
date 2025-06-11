@@ -29,18 +29,27 @@ class OneVariableTimeDependendSolver:
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
-    def solve(self, time_increment=0.1, frames=10, max_iters=100,
-              problem_kwargs=None, verbose=True, vtk_out=False, plot_bounds=None):
+    def solve(
+        self,
+        time_increment=0.1,  # Time-step size for update
+        frames=10,           # Amount of frames (plotting, vtk, checks)
+        max_iters=100,       # Amount of iterations
+        problem_kwargs=None, # problem-specific input
+        jit=True,            # just-in-time compilation
+        verbose=True,        # ='plot' for visual output
+        vtk_out=False,       # save vtk each frame
+        plot_bounds=None     # bounds for visual output
+        ):
 
         problem_kwargs = problem_kwargs or {}
         problem = self.problem_cls(self.vg, **problem_kwargs)
         u = self.vg.init_field_from_numpy(self.vf.fields[self.fieldname])
         step_fn = self.timestepper_fn(problem, time_increment)
         # Make use of just-in-time compilation
-        if self.backend == 'jax':
+        if jit and self.backend == 'jax':
             import jax
             step_fn = jax.jit(step_fn)
-        elif self.backend == 'torch':
+        elif jit and self.backend == 'torch':
             import torch
             step_fn = torch.compile(step_fn)
 
@@ -75,7 +84,7 @@ class OneVariableTimeDependendSolver:
             sys.exit(1)
 
         if vtk_out:
-            filename = self.fieldname+f"_{self.frame:03d}.vtk"
+            filename = self.fieldname+f"_{frame:03d}.vtk"
             self.vf.export_to_vtk(filename=filename, field_names=[self.fieldname])
 
         if verbose == 'plot':

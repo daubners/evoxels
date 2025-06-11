@@ -48,6 +48,11 @@ dev = [
     "pytest",
     "ruff"
 ]
+notebooks = [
+    "ipywidgets",
+    "ipympl",
+    "notebook"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
