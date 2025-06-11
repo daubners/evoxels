@@ -72,9 +72,14 @@ class VoxelFields:
         self.fields = {}
 
     def __str__(self):
-        return f"Domain with size {self.domain_size} and {(self.Nx, self.Ny, self.Nz)} grid points on {self.convention} position."
+        """Return a human readable description of the voxel grid."""
+        return (
+            f"Domain with size {self.domain_size} and {(self.Nx, self.Ny, self.Nz)} "
+            f"grid points on {self.convention} position."
+        )
 
     def grid_info(self):
+        """Return a :class:`Grid` dataclass describing this domain."""
         grid = Grid((self.Nx, self.Ny, self.Nz), self.origin, self.spacing, self.convention)
         return grid
 
@@ -102,6 +107,7 @@ class VoxelFields:
             self.fields[name] = np.zeros((self.Nx, self.Ny, self.Nz))
 
     def calc_field_average(self, name: str):
+        """Return the average value of a stored field."""
         if self.convention == 'cell_center':
             average = np.mean(self.fields[name])
         elif self.convention == 'staggered_x':

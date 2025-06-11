@@ -4,7 +4,9 @@ import subprocess
 from abc import ABC, abstractmethod
 
 class MemoryProfiler(ABC):
+    """Base interface for tracking host and device memory usage."""
     def get_cuda_memory_from_nvidia_smi(self):
+        """Return currently used CUDA memory in megabytes."""
         try:
             output = subprocess.check_output(
                 ['nvidia-smi', '--query-gpu=memory.used',
@@ -16,15 +18,18 @@ class MemoryProfiler(ABC):
             print(f"Error tracking memory with nvidia-smi: {e}")
 
     def update_memory_stats(self):
+        """Update the maximum observed device memory usage."""
         used = self.get_cuda_memory_from_nvidia_smi()
         self.max_used = np.max((self.max_used, used))
 
     @abstractmethod
     def print_memory_stats(self, start: float, end: float, iters: int):
+        """Print profiling summary after a simulation run."""
         pass
 
 class TorchMemoryProfiler(MemoryProfiler):
     def __init__(self, device):
+        """Initialize the profiler for a given torch device."""
         import torch
         self.torch = torch
         self.device = device
@@ -33,6 +38,7 @@ class TorchMemoryProfiler(MemoryProfiler):
         self.max_used = 0
 
     def print_memory_stats(self, start, end, iters):
+        """Print usage statistics for the Torch backend."""
         print(f'Wall time: {np.around(end - start, 4)} s after {iters} iterations '
               f'({np.around((end - start)/iters, 4)} s/iter)')
         
@@ -54,11 +60,13 @@ class TorchMemoryProfiler(MemoryProfiler):
 
 class JAXMemoryProfiler(MemoryProfiler):
     def __init__(self):
+        """Initialize the profiler for JAX."""
         import jax
         self.jax = jax
         self.max_used = 0
 
     def print_memory_stats(self, start, end, iters):
+        """Print usage statistics for the JAX backend."""
         print(f'Wall time: {np.around(end - start, 4)} s after {iters} iterations '
               f'({np.around((end - start)/iters, 4)} s/iter)')
 
