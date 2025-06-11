@@ -4,6 +4,7 @@ from typing import Callable, Any, Type
 from timeit import default_timer as timer
 import sys
 
+
 @dataclass
 class OneVariableTimeDependendSolver:
     """Generic wrapper for solving a single field with a time stepper."""
@@ -13,20 +14,22 @@ class OneVariableTimeDependendSolver:
     problem_cls: Type
     timestepper_fn: Callable
     backend: str
-    device: str='cuda'
+    device: str = "cuda"
 
     def __post_init__(self):
         """Initialize backend specific components."""
-        if self.backend == 'torch':
+        if self.backend == "torch":
             from .voxelgrid import VoxelGridTorch
             from .profiler import TorchMemoryProfiler
+
             grid = self.vf.grid_info()
             self.vg = VoxelGridTorch(grid, device=self.device)
             self.profiler = TorchMemoryProfiler(self.vg.device)
 
-        elif self.backend == 'jax':
+        elif self.backend == "jax":
             from .voxelgrid import VoxelGridJax
             from .profiler import JAXMemoryProfiler
+
             self.vg = VoxelGridJax(self.vf.grid_info())
             self.profiler = JAXMemoryProfiler()
         else:
@@ -41,8 +44,8 @@ class OneVariableTimeDependendSolver:
         jit=True,
         verbose=True,
         vtk_out=False,
-        plot_bounds=None
-        ):
+        plot_bounds=None,
+    ):
         """Run the time integration loop.
 
         Args:
@@ -50,7 +53,7 @@ class OneVariableTimeDependendSolver:
             frames (int): Number of output frames (for plotting, vtk, checks).
             max_iters (int): Number of time steps to compute.
             problem_kwargs (dict | None): Problem-specific input arguments.
-            jit (bool): Create just-in-time compiled kernel if ``True`` 
+            jit (bool): Create just-in-time compiled kernel if ``True``
             verbose (bool | str): If ``True`` prints memory stats, ``'plot'``
                 updates an interactive plot.
             vtk_out (bool): Write VTK files for each frame if ``True``.
@@ -62,11 +65,13 @@ class OneVariableTimeDependendSolver:
         u = self.vg.init_field_from_numpy(self.vf.fields[self.fieldname])
         step_fn = self.timestepper_fn(problem, time_increment)
         # Make use of just-in-time compilation
-        if jit and self.backend == 'jax':
+        if jit and self.backend == "jax":
             import jax
+
             step_fn = jax.jit(step_fn)
-        elif jit and self.backend == 'torch':
+        elif jit and self.backend == "torch":
             import torch
+
             step_fn = torch.compile(step_fn)
 
         n_out = max_iters // frames
@@ -77,7 +82,9 @@ class OneVariableTimeDependendSolver:
         for i in range(max_iters):
             time = i * time_increment
             if i % n_out == 0:
-                self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds)
+                self._handle_outputs(
+                    u, frame, time, slice_idx, vtk_out, verbose, plot_bounds
+                )
                 frame += 1
 
             u = step_fn(u, time)
@@ -101,9 +108,11 @@ class OneVariableTimeDependendSolver:
             sys.exit(1)
 
         if vtk_out:
-            filename = self.fieldname+f"_{frame:03d}.vtk"
+            filename = self.fieldname + f"_{frame:03d}.vtk"
             self.vf.export_to_vtk(filename=filename, field_names=[self.fieldname])
 
-        if verbose == 'plot':
+        if verbose == "plot":
             clear_output(wait=True)
-            self.vf.plot_slice(self.fieldname, slice_idx, time=time, value_bounds=plot_bounds)
+            self.vf.plot_slice(
+                self.fieldname, slice_idx, time=time, value_bounds=plot_bounds
+            )

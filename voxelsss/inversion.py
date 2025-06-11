@@ -1,3 +1,5 @@
+from functools import partial
+
 try:
     import diffrax as dfx
     import equinox as eqx
@@ -10,14 +12,13 @@ except Exception:
     optx = None
     jnp = None
     jax = None
-JAX_AVAILABLE = jax is not None
 
-import numpy as np
-from functools import partial
 from .voxelfields import VoxelFields
 from .timesteppers import SemiImplicitFourierSpectral
 from .problem_definition import PeriodicCahnHilliard
 from .voxelgrid import VoxelGridJax
+
+JAX_AVAILABLE = jax is not None
 
 
 class CahnHilliardInversionModel:
@@ -67,17 +68,15 @@ class CahnHilliardInversionModel:
             throw=False,
             adjoint=adjoint,
         )
-        return solution.ys[:,0]
+        return solution.ys[:, 0]
 
     def residuals(self, parameters, y0s__values__saveat, adjoint=dfx.ForwardMode()):
         y0s, values, saveat = y0s__values__saveat
         solve_ = partial(self.solve, adjoint=adjoint)
-        batch_solve = jax.vmap(
-            solve_, in_axes=(None, 0, None)
-        )
+        batch_solve = jax.vmap(solve_, in_axes=(None, 0, None))
         pred_values = batch_solve(parameters, y0s, saveat)
         residuals = values - pred_values[:, 1:]
-        return residuals, jax.tree.map(lambda x: 10.0 * x, parameters)
+        return residuals
 
     def train(
         self,
@@ -90,29 +89,45 @@ class CahnHilliardInversionModel:
         verbose=True,
         max_steps=1000,
     ):
-        
         # Get length of first sequence to use as reference
         ref_len = len(inds[0])
         if ref_len < 2:
             raise ValueError("Each sequence in inds must have at least 2 elements")
-            
+
         # Get reference spacing from first sequence
-        ref_spacing = [inds[0][i+1] - inds[0][i] for i in range(ref_len-1)]
-        
+        ref_spacing = [inds[0][i + 1] - inds[0][i] for i in range(ref_len - 1)]
+
         # Validate all other sequences
         for i, sequence in enumerate(inds):
             if len(sequence) != ref_len:
-                raise ValueError(f"Sequence {i} has different length than first sequence")
-            
+                raise ValueError(
+                    f"Sequence {i} has different length than first sequence"
+                )
+
             # Check spacing
-            spacing = [sequence[j+1] - sequence[j] for j in range(len(sequence)-1)]
+            spacing = [sequence[j + 1] - sequence[j] for j in range(len(sequence) - 1)]
             if spacing != ref_spacing:
-                raise ValueError(f"Sequence {i} has different spacing than first sequence")
+                raise ValueError(
+                    f"Sequence {i} has different spacing than first sequence"
+                )
 
         # TODO: make data a voxelgrid or voxelfield object
         y0s = jnp.array([data["ys"][ind[0]] for ind in inds])
-        values = jnp.array([jnp.array([data["ys"][ind[i]] for i in range(1, len(ind))]) for ind in inds])
-        saveat = dfx.SaveAt(ts=jnp.array([0.0] + [data["ts"][inds[0][i]] - data["ts"][inds[0][0]] for i in range(1, len(inds[0]))]))
+        values = jnp.array(
+            [
+                jnp.array([data["ys"][ind[i]] for i in range(1, len(ind))])
+                for ind in inds
+            ]
+        )
+        saveat = dfx.SaveAt(
+            ts=jnp.array(
+                [0.0]
+                + [
+                    data["ts"][inds[0][i]] - data["ts"][inds[0][0]]
+                    for i in range(1, len(inds[0]))
+                ]
+            )
+        )
 
         args = (y0s, values, saveat)
         residuals_ = partial(self.residuals, adjoint=adjoint)

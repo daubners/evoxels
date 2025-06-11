@@ -2,6 +2,7 @@ from ..problem_definition import PeriodicCahnHilliard
 from ..solvers import OneVariableTimeDependendSolver
 from ..timesteppers import pseudo_spectral_IMEX
 
+
 def run_cahn_hilliard_solver(
     voxelfields,
     fieldname: str,
@@ -16,7 +17,7 @@ def run_cahn_hilliard_solver(
     A: float = 0.25,
     vtk_out: bool = False,
     verbose: bool = True,
-    plot_bounds = None,
+    plot_bounds=None,
 ):
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
@@ -34,7 +35,7 @@ def run_cahn_hilliard_solver(
         frames=frames,
         max_iters=max_iters,
         problem_kwargs={"eps": eps, "D": diffusivity, "A": A},
-        jit=jit, \
+        jit=jit,
         verbose=verbose,
         vtk_out=vtk_out,
         plot_bounds=plot_bounds,
