@@ -6,7 +6,9 @@ import sys
 
 @dataclass
 class OneVariableTimeDependendSolver:
-    vf: Any # VoxelFields object
+    """Generic wrapper for solving a single field with a time stepper."""
+
+    vf: Any  # VoxelFields object
     fieldname: str
     problem_cls: Type
     timestepper_fn: Callable
@@ -14,6 +16,7 @@ class OneVariableTimeDependendSolver:
     device: str='cuda'
 
     def __post_init__(self):
+        """Initialize backend specific components."""
         if self.backend == 'torch':
             from .voxelgrid import VoxelGridTorch
             from .profiler import TorchMemoryProfiler
@@ -31,15 +34,28 @@ class OneVariableTimeDependendSolver:
 
     def solve(
         self,
-        time_increment=0.1,  # Time-step size for update
-        frames=10,           # Amount of frames (plotting, vtk, checks)
-        max_iters=100,       # Amount of iterations
-        problem_kwargs=None, # problem-specific input
-        jit=True,            # just-in-time compilation
-        verbose=True,        # ='plot' for visual output
-        vtk_out=False,       # save vtk each frame
-        plot_bounds=None     # bounds for visual output
+        time_increment=0.1,
+        frames=10,
+        max_iters=100,
+        problem_kwargs=None,
+        jit=True,
+        verbose=True,
+        vtk_out=False,
+        plot_bounds=None
         ):
+        """Run the time integration loop.
+
+        Args:
+            time_increment (float): Size of a single time step.
+            frames (int): Number of output frames (for plotting, vtk, checks).
+            max_iters (int): Number of time steps to compute.
+            problem_kwargs (dict | None): Problem-specific input arguments.
+            jit (bool): Create just-in-time compiled kernel if ``True`` 
+            verbose (bool | str): If ``True`` prints memory stats, ``'plot'``
+                updates an interactive plot.
+            vtk_out (bool): Write VTK files for each frame if ``True``.
+            plot_bounds (tuple | None): Optional value range for plots.
+        """
 
         problem_kwargs = problem_kwargs or {}
         problem = self.problem_cls(self.vg, **problem_kwargs)
@@ -74,6 +90,7 @@ class OneVariableTimeDependendSolver:
             self.profiler.print_memory_stats(start, end, max_iters)
 
     def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds):
+        """Store results and optionally plot or write them to disk."""
         self.vf.fields[self.fieldname] = self.vg.export_field_to_numpy(u)
 
         if verbose:
