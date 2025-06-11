@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, Any
+from typing import Any
 from .voxelgrid import VoxelGrid
 
 class ODE(ABC):

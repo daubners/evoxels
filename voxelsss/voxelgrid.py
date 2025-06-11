@@ -208,9 +208,12 @@ class VoxelGridTorch(VoxelGrid):
 
         # Handle torch device
         self.device = torch.device(device)
-        if torch.device(device).type.startswith('cuda') and not torch.cuda.is_available():
-            self.device = torch.device('cpu')
-            warnings.warn("CUDA not available, defaulting device to cpu. To avoid this warning, set device=torch.device('cpu')")
+        if torch.device(device).type.startswith("cuda") and not torch.cuda.is_available():
+            self.device = torch.device("cpu")
+            warnings.warn(
+                "CUDA not available, defaulting device to cpu. "
+                "To avoid this warning, set device=torch.device('cpu')",
+            )
         torch.set_default_device(self.device)
 
         # Handle torch precision

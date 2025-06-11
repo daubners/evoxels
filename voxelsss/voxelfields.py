@@ -72,7 +72,11 @@ class VoxelFields:
         self.fields = {}
 
     def __str__(self):
-        return f"Domain with size {self.domain_size} and {(self.Nx, self.Ny, self.Nz)} grid points on {self.convention} position."
+        return (
+            f"Domain with size {self.domain_size} and "
+            f"{(self.Nx, self.Ny, self.Nz)} grid points on "
+            f"{self.convention} position."
+        )
 
     def grid_info(self):
         grid = Grid((self.Nx, self.Ny, self.Nz), self.origin, self.spacing, self.convention)
@@ -238,7 +242,14 @@ class VoxelFields:
         fig, ax = plt.subplots()
         if value_bounds is None:
             value_bounds = (np.min(field), np.max(field))
-        im = ax.imshow(field[0].T, cmap=colormap, origin='lower', extent=[0, end1, 0, end2], vmin=value_bounds[0], vmax=value_bounds[1])
+        im = ax.imshow(
+            field[0].T,
+            cmap=colormap,
+            origin="lower",
+            extent=[0, end1, 0, end2],
+            vmin=value_bounds[0],
+            vmax=value_bounds[1],
+        )
         ax.set_xlabel(label1)
         ax.set_ylabel(label2)
         ax.set_title(f'Slice 0 in {direction}-direction of {fieldname}')
