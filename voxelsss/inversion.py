@@ -1,9 +1,18 @@
-import diffrax as dfx
-import jax.numpy as jnp
-import jax
+try:
+    import diffrax as dfx
+    import equinox as eqx
+    import optimistix as optx
+    import jax.numpy as jnp
+    import jax
+except Exception:
+    dfx = None
+    eqx = None
+    optx = None
+    jnp = None
+    jax = None
+JAX_AVAILABLE = jax is not None
+
 import numpy as np
-import equinox as eqx
-import optimistix as optx
 from functools import partial
 from .voxelfields import VoxelFields
 from .timesteppers import SemiImplicitFourierSpectral
@@ -23,6 +32,11 @@ class CahnHilliardInversionModel:
         eps=3.0,
         A=0.25,
     ):
+        if not JAX_AVAILABLE:
+            raise ImportError(
+                "CahnHilliardInversionModel requires the optional JAX"
+                " dependencies (jax, diffrax, equinox, optimistix)."
+            )
         self.Nx, self.Ny, self.Nz = Nx, Ny, Nz
         self.Lx, self.Ly, self.Lz = Lx, Ly, Lz
         self.eps, self.A = eps, A
