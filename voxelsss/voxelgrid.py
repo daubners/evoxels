@@ -164,7 +164,9 @@ class VoxelGrid:
 
     def export_field_to_numpy(self, field):
         """Export backend field back to NumPy without ghost nodes."""
-        inner = self.squeeze(self.return_inner_values(field), 0)
+        # inner = self.squeeze(self.return_inner_values(field), 0)
+        # @SIMON: changed to fields don't have ghost nodes
+        inner = self.squeeze(field, 0)
         return self.to_numpy(inner)
 
     def calc_field_average(self, field):

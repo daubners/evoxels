@@ -6,7 +6,7 @@ try:
     import optimistix as optx
     import jax.numpy as jnp
     import jax
-except Exception:
+except ImportError:
     dfx = None
     eqx = None
     optx = None
