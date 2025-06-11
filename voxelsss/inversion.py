@@ -76,7 +76,8 @@ class CahnHilliardInversionModel:
             solve_, in_axes=(None, 0, None)
         )
         pred_values = batch_solve(parameters, y0s, saveat)
-        return values - pred_values[:, 1:]
+        residuals = values - pred_values[:, 1:]
+        return residuals, jax.tree.map(lambda x: 10.0 * x, parameters)
 
     def train(
         self,
