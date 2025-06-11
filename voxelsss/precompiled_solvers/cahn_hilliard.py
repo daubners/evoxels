@@ -6,6 +6,7 @@ def run_cahn_hilliard_solver(
     voxelfields,
     fieldname: str,
     backend: str,
+    jit: bool = True,
     device: str = "cuda",
     time_increment: float = 0.1,
     frames: int = 10,
@@ -15,7 +16,7 @@ def run_cahn_hilliard_solver(
     A: float = 0.25,
     vtk_out: bool = False,
     verbose: bool = True,
-    plot_bounds=None,
+    plot_bounds = None,
 ):
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
@@ -33,6 +34,7 @@ def run_cahn_hilliard_solver(
         frames=frames,
         max_iters=max_iters,
         problem_kwargs={"eps": eps, "D": diffusivity, "A": A},
+        jit=jit, \
         verbose=verbose,
         vtk_out=vtk_out,
         plot_bounds=plot_bounds,
