@@ -19,9 +19,9 @@ def grid_convergence_test(
 
     for i, p in enumerate(powers):
         if convention == 'cell_center':
-            vf = vox.VoxelFields(2**p, 2**p, 2**p, (1,1,1), convention=convention)
+            vf = vox.VoxelFields((2**p, 2**p, 2**p), (1, 1, 1), convention=convention)
         elif convention == 'staggered_x':
-            vf = vox.VoxelFields(2**p+1, 2**p, 2**p, (1,1,1), convention=convention)
+            vf = vox.VoxelFields((2**p + 1, 2**p, 2**p), (1, 1, 1), convention=convention)
         vf.precision = dtype
         grid = vf.meshgrid()
         init_data = init_fun(*grid)
