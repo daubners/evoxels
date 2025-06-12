@@ -9,3 +9,5 @@ Welcome to the voxelsss documentation!
    notebooks/00-using-voxelfields.ipynb
    notebooks/01-Cahn-Hilliard-solvers.ipynb
    api
+   contributing
+   authors
