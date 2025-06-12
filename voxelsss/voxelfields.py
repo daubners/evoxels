@@ -32,9 +32,7 @@ class VoxelFields:
     handles spacing and origin, and stores any number of named 3D fields.
 
     Args:
-        num_x (int): Number of voxels along the x-axis.
-        num_y (int): Number of voxels along the y-axis.
-        num_z (int): Number of voxels along the z-axis.
+        shape (tuple[int, int, int]): Number of voxels ``(Nx, Ny, Nz)``.
         domain_size (tuple[float, float, float], optional):
             Physical dimensions (Lx, Ly, Lz). Defaults to (1, 1, 1).
         convention (str, optional):
@@ -47,9 +45,7 @@ class VoxelFields:
         Warning: If the spacing ratio max/min > 10, a warning is issued.
 
     Attributes:
-        Nx (int): Number of voxels in x.
-        Ny (int): Number of voxels in y.
-        Nz (int): Number of voxels in z.
+        shape (tuple[int, int, int]): Number of voxels ``(Nx, Ny, Nz)``.
         domain_size (tuple[float, float, float]): Physical domain lengths.
         spacing (tuple[float, float, float]): Grid spacing (dx, dy, dz).
         origin (tuple[float, float, float]):
@@ -61,16 +57,22 @@ class VoxelFields:
         fields (dict[str, np.ndarray]): Mapping field names to 3D arrays.
 
     Example:
-        >>> vf = VoxelFields(100, 100, 100, domain_size=(1,1,1))
+        >>> vf = VoxelFields((100, 100, 100), domain_size=(1, 1, 1))
         >>> vf.add_field('temperature', np_array)
         >>> x, y, z = vf.plot_slice('temperature', 10)
     """
 
-    def __init__(self, num_x: int, num_y: int, num_z: int, domain_size = (1,1,1), convention='cell_center'):
-        self.Nx = num_x
-        self.Ny = num_y
-        self.Nz = num_z
-        self.precision = np.float32 #np.float64
+    def __init__(self, shape: Tuple[int, int, int], domain_size=(1, 1, 1), convention='cell_center'):
+        """Create a voxel grid with ``shape`` cells."""
+        if not (
+            isinstance(shape, (list, tuple))
+            and len(shape) == 3
+            and all(isinstance(n, (int, np.integer)) for n in shape)
+        ):
+            raise ValueError("shape must be a tuple of three integers")
+        self.shape = tuple(int(n) for n in shape)
+        num_x, num_y, num_z = self.shape
+        self.precision = np.float32  # np.float64
         self.convention = convention
 
         if not isinstance(domain_size, (list, tuple)) or len(domain_size) != 3:
@@ -93,17 +95,29 @@ class VoxelFields:
         self.grid = None
         self.fields = {}
 
+    @property
+    def Nx(self) -> int:  # backward compatibility
+        return self.shape[0]
+
+    @property
+    def Ny(self) -> int:
+        return self.shape[1]
+
+    @property
+    def Nz(self) -> int:
+        return self.shape[2]
+
     def __str__(self):
         """Return a human readable description of the voxel grid."""
         return (
             f"Domain with size {self.domain_size} and "
-            f"{(self.Nx, self.Ny, self.Nz)} grid points on "
+            f"{self.shape} grid points on "
             f"{self.convention} position."
         )
 
     def grid_info(self):
         """Return a :class:`Grid` dataclass describing this domain."""
-        grid = Grid((self.Nx, self.Ny, self.Nz), self.origin, self.spacing, self.convention)
+        grid = Grid(self.shape, self.origin, self.spacing, self.convention)
         return grid
 
     def add_field(self, name: str, array=None):
@@ -120,14 +134,16 @@ class VoxelFields:
         """
         if array is not None:
             if isinstance(array, np.ndarray):
-                if array.shape == (self.Nx, self.Ny, self.Nz):
+                if array.shape == self.shape:
                     self.fields[name] = array
                 else:
-                    raise ValueError(f"The provided array must have the shape ({self.Nx}, {self.Ny}, {self.Nz}).")
+                    raise ValueError(
+                        f"The provided array must have the shape {self.shape}."
+                    )
             else:
                 raise TypeError("The provided array must be a numpy array.")
         else:
-            self.fields[name] = np.zeros((self.Nx, self.Ny, self.Nz))
+            self.fields[name] = np.zeros(self.shape)
 
     def calc_field_average(self, name: str):
         """Return the average value of a stored field."""
@@ -138,7 +154,7 @@ class VoxelFields:
             average = np.sum(self.fields[name][1:-1,:,:]) \
                       + 0.5*np.sum(self.fields[name][ 0,:,:]) \
                       + 0.5*np.sum(self.fields[name][-1,:,:])
-            average /= ((self.Nx-1) * self.Ny * self.Nz)
+            average /= ((self.Nx - 1) * self.Ny * self.Nz)
         return average
     
     # TODO: not sure if those are needed here or should fully live
@@ -148,7 +164,7 @@ class VoxelFields:
         """ Returns the 1D coordinate arrays along each axis. """
         return tuple(
             np.arange(0, n, dtype=self.precision) * self.spacing[i] + self.origin[i]
-            for i, n in enumerate((self.Nx, self.Ny, self.Nz))
+            for i, n in enumerate(self.shape)
         )
     
     # TODO: not sure if those are needed here or should fully live
