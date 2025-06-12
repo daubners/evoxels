@@ -3,6 +3,8 @@
 # voxelsss
 A differentiable physics framework for voxel-based microstructure simulations
 
+For more detailed information about the code [read the docs](https://voxelsss.readthedocs.io).
+
 <p align="center">
   <img src="voxelsss-graphical.png" width="70%"></img>
 </p>
@@ -75,7 +77,7 @@ import numpy as np
 
 nx, ny, nz = [100, 100, 100]
 
-vf = vox.VoxelFields(nx, ny, nz, (nx,ny,nz))
+vf = vox.VoxelFields((nx, ny, nz), (nx,ny,nz))
 noise = 0.5 + 0.1*np.random.rand(nx, ny, nz)
 vf.add_field("c", noise)
 
