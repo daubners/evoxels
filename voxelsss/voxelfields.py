@@ -26,25 +26,47 @@ import warnings
 from .voxelgrid import Grid
 
 class VoxelFields:
-    """
-    Represents a 3D voxel grid with fields for simulation and visualization.
+    """Manage 3D voxel grids for simulation, visualization, and I/O.
+
+    This class provides a uniform, cell‐centered or staggered‐x voxel grid,
+    handles spacing and origin, and stores any number of named 3D fields.
+
+    Args:
+        num_x (int): Number of voxels along the x-axis.
+        num_y (int): Number of voxels along the y-axis.
+        num_z (int): Number of voxels along the z-axis.
+        domain_size (tuple[float, float, float], optional):
+            Physical dimensions (Lx, Ly, Lz). Defaults to (1, 1, 1).
+        convention (str, optional):
+            Grid convention, either 'cell_center' or 'staggered_x'.
+            Defaults to 'cell_center'.
+
+    Raises:
+        ValueError: If `domain_size` is not length 3 or contains non-numeric values.
+        ValueError: If `convention` is not one of 'cell_center' or 'staggered_x'.
+        Warning: If the spacing ratio max/min > 10, a warning is issued.
 
     Attributes:
-        Nx, Ny, Nz: Number of voxels along the x, y and z-axis.
-        domain_size (tuple): Length of physical domain (Lx, Ly, Lz)
-        spacing (tuple): Grid spacing along each axis (dx, dy, dz).
-        origin (tuple): Position of lower left corner (for vtk export)
-        fields (dict): Dictionary to store named 3D fields.
+        Nx (int): Number of voxels in x.
+        Ny (int): Number of voxels in y.
+        Nz (int): Number of voxels in z.
+        domain_size (tuple[float, float, float]): Physical domain lengths.
+        spacing (tuple[float, float, float]): Grid spacing (dx, dy, dz).
+        origin (tuple[float, float, float]):
+            Coordinates of the (0, 0, 0) corner for cell-centered or staggered grids.
+        convention (str): Either 'cell_center' or 'staggered_x'.
+        precision (type): NumPy floating-point type for grid coordinates.
+        grid (tuple[np.ndarray, np.ndarray, np.ndarray] or None):
+            Meshgrid arrays (x, y, z) once created by `add_grid()`, else None.
+        fields (dict[str, np.ndarray]): Mapping field names to 3D arrays.
+
+    Example:
+        >>> vf = VoxelFields(100, 100, 100, domain_size=(1,1,1))
+        >>> vf.add_field('temperature', np_array)
+        >>> x, y, z = vf.plot_slice('temperature', 10)
     """
 
     def __init__(self, num_x: int, num_y: int, num_z: int, domain_size = (1,1,1), convention='cell_center'):
-        """
-        Initializes the voxel grid with specified dimensions and domain size.
-
-        Raises:
-            ValueError: If domain_size is not a list or tuple with three elements or contains non-numeric values.
-            Warning: If spacings differ significantly, a warning is issued.
-        """
         self.Nx = num_x
         self.Ny = num_y
         self.Nz = num_z
