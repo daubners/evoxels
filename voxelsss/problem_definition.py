@@ -92,10 +92,9 @@ class PoissonEquation(SpectralODE):
     @property
     def spectral_factor(self):
         return self._spectral_factor
-    
+
     def pad_boundary_conditions(self, u):
-        fun = lambda u: self.pad_bcs(u, self.bcs[0], self.bcs[1])
-        return fun(u)
+        return self.pad_bcs(u, self.bcs[0], self.bcs[1])
     
     def rhs_analytic(self, u, t):
         return self.D*spv.laplacian(u) + self.f(u, t)
