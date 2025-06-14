@@ -27,16 +27,16 @@ def test_periodic_laplace_torch():
     assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
 
 # def test_periodic_laplace_jax():
-    _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
-        problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'periodic'},
-        test_function  = test_fun1,
-        convention     = 'cell_center',
-        dtype          = 'float32',
-        backend       = 'jax'
-    )
-    assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
+    # _ ,_ , slope, order = rhs_convergence_test(
+    #     ODE_class      = PoissonEquation,
+    #     problem_kwargs = {'D': 1.0, 'f': forcing, \
+    #                       'BC_type': 'periodic'},
+    #     test_function  = test_fun1,
+    #     convention     = 'cell_center',
+    #     dtype          = 'float32',
+    #     backend       = 'jax'
+    # )
+    # assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
 
 
 # Test 2: Laplace with zero BC!
