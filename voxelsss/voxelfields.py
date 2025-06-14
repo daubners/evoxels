@@ -72,7 +72,7 @@ class VoxelFields:
             raise ValueError("shape must be a tuple of three integers")
         self.shape = tuple(int(n) for n in shape)
         num_x, num_y, num_z = self.shape
-        self.precision = np.float32  # np.float64
+        self.precision = 'float32'  # float64
         self.convention = convention
 
         if not isinstance(domain_size, (list, tuple)) or len(domain_size) != 3:

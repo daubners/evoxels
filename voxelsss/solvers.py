@@ -58,9 +58,10 @@ class OneVariableTimeDependendSolver:
         """
 
         problem_kwargs = problem_kwargs or {}
-        problem = self.problem_cls(self.vg, **problem_kwargs)
-        u = self.vg.init_field_from_numpy(self.vf.fields[self.fieldname])
-        step_fn = self.timestepper_fn(problem, time_increment)
+        self.problem = self.problem_cls(self.vg, **problem_kwargs)
+        u = self.vg.init_scalar_field(self.vf.fields[self.fieldname])
+        u = self.vg.trim_boundary_nodes(u)
+        step_fn = self.timestepper_fn(self.problem, time_increment)
         # Make use of just-in-time compilation
         if jit and self.backend == 'jax':
             import jax
@@ -91,12 +92,13 @@ class OneVariableTimeDependendSolver:
 
     def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds):
         """Store results and optionally plot or write them to disk."""
-        self.vf.fields[self.fieldname] = self.vg.export_field_to_numpy(u)
+        u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
+        self.vf.fields[self.fieldname] = self.vg.export_scalar_field_to_numpy(u_out)
 
         if verbose:
             self.profiler.update_memory_stats()
 
-        if self.vg.lib.isnan(u).any():
+        if self.vg.lib.isnan(u_out).any():
             print(f"NaN detected in frame {frame} at time {time}. Aborting simulation.")
             sys.exit(1)
 

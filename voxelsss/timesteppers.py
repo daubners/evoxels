@@ -8,7 +8,7 @@ def forward_euler(problem: ODE, time_increment: float) -> TimeStepFn:
     """First order Euler forward scheme"""
     def step_fn(u, t):
         update = time_increment * problem.rhs(u, t)
-        return u + problem.vg.pad_with_ghost_nodes(update)
+        return u + update
     
     return step_fn
 
@@ -23,6 +23,6 @@ def pseudo_spectral_IMEX(problem: SpectralODE, time_increment: float) -> TimeSte
         dc_fft = problem.vg.rfftn(dc)
         dc_fft *= time_increment / (1 + time_increment*problem.spectral_factor)
         update = problem.vg.irfftn(dc_fft, dc.shape)
-        return u + problem.vg.pad_with_ghost_nodes(update)
+        return u + update
 
     return step_fn

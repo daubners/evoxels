@@ -33,7 +33,8 @@ dependencies = [
     "matplotlib>=3.4",
     "pyvista>=0.38",
     "psutil>=5.9.0",
-    "ipython>=7.0.0"
+    "ipython>=7.0.0",
+    "sympy>=1.10"
 ]
 
 [project.optional-dependencies]
