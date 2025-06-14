@@ -32,6 +32,7 @@ def grid_convergence_test(
             vg = vox.voxelgrid.VoxelGridJax(vf.grid_info(), precision=vf.precision)
         field = vg.init_field_from_numpy(init_data)
 
+
         # Compute solutions
         comp = vg.export_field_to_numpy(test_function(vg, field))
         exact = exact_fun(*grid)
@@ -57,6 +58,7 @@ def laplace_periodic(x,y,z):
     return -sin(2*pi*x)*sin(4*pi*y)*sin(6*pi*z)
 
 def calc_laplace_periodic(vg, field):
+    field = vg.pad_zeros(field)
     field = vg.apply_periodic_BC(field)
     laplace = vg.calc_laplace(field)
     return laplace
@@ -89,6 +91,7 @@ def laplace_zero_dirichlet(x,y,z):
     return 2 - 12*x + 12*x**2
 
 def calc_laplace_zero_dirichlet(vg, field):
+    field = vg.pad_zeros(field)
     field = vg.apply_dirichlet_periodic_BC(field)
     laplace = vg.calc_laplace(field)
     return laplace
@@ -114,6 +117,7 @@ def laplace_nonzero_dirichlet(x,y,z):
     return  3*pi**2*(2*sin(pi*x)**2 - cos(pi*x)**2)*cos(pi*x)
 
 def calc_laplace_nonzero_dirichlet(vg, field):
+    field = vg.pad_zeros(field)
     field = vg.apply_dirichlet_periodic_BC(field, bc0=bc_l, bc1=bc_r)
     laplace = vg.calc_laplace(field)
     return laplace
@@ -138,6 +142,7 @@ def laplace_zero_flux_BC(x,y,z):
     return -cos(2*pi*x)*sin(4*pi*y)*sin(6*pi*z)
 
 def calc_laplace_zero_flux_BC(vg, field):
+    field = vg.pad_zeros(field)
     field = vg.apply_zero_flux_periodic_BC(field)
     laplace = vg.calc_laplace(field)
     return laplace

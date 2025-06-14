@@ -121,7 +121,7 @@ class VoxelGrid:
             # For staggered grid we don't need ghost nodes in x
             field = field[:,1:-1,:,:]
         return field
-    
+
     def return_inner_values(self, field):
         """Return the values without ghost nodes."""
         if self.convention == 'staggered_x':
@@ -129,18 +129,17 @@ class VoxelGrid:
         else :
             inner_field = field[:,1:-1,1:-1,1:-1]
         return inner_field
-    
+
     def init_field_from_numpy(self, array: np.ndarray):
         """Convert and pad a NumPy array for simulation."""
         field = self.to_backend(array)
         field = self.expand_dim(field, 0)
-        field = self.pad_with_ghost_nodes(field)
         return field
 
     def export_field_to_numpy(self, field):
-        """Export backend field back to NumPy without ghost nodes."""
-        inner = self.squeeze(self.return_inner_values(field), 0)
-        return self.to_numpy(inner)
+        """Export backend field back to NumPy."""
+        array = self.to_numpy(self.squeeze(field, 0))
+        return array
     
     def calc_field_average(self, field):
         # TODO: this currently only works for batch dimension of 1
@@ -226,7 +225,6 @@ class VoxelGrid:
             (field[:, 1:-1, 2:, 1:-1] + field[:, 1:-1, :-2, 1:-1]) * self.div_dx2[1] + \
             (field[:, 1:-1, 1:-1, 2:] + field[:, 1:-1, 1:-1, :-2]) * self.div_dx2[2] - \
              2 * field[:, 1:-1, 1:-1, 1:-1] * self.lib.sum(self.div_dx2)
-        laplace = self.pad_zeros(laplace)
         return laplace
 
 
