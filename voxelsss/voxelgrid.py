@@ -27,18 +27,19 @@ class VoxelGrid:
         self.lib = lib
 
         # Other grid information
-        self.size    = self.shape[0] * self.shape[1] * self.shape[2]
         self.div_dx2 = 1/self.to_backend(np.array(self.spacing))**2
 
         # Boundary conditions
         if self.convention == 'staggered_x':
-            self.apply_dirichlet_periodic_BC = self.apply_dirichlet_periodic_BC_staggered_x
-            self.apply_zero_flux_periodic_BC = self.apply_zero_flux_periodic_BC_staggered_x
-            self.apply_periodic_BC           = self.apply_periodic_BC_staggered_x
+            self.trim_boundary_nodes       = self.trim_boundary_nodes_staggered_x
+            self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_staggered_x
+            self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_staggered_x
+            self.pad_periodic_BC           = self.pad_periodic_BC_staggered_x
         else:
-            self.apply_dirichlet_periodic_BC = self.apply_dirichlet_periodic_BC_cell_center
-            self.apply_zero_flux_periodic_BC = self.apply_zero_flux_periodic_BC_cell_center
-            self.apply_periodic_BC           = self.apply_periodic_BC_cell_center
+            self.trim_boundary_nodes       = self.trim_boundary_nodes_cell_center
+            self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_cell_center
+            self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_cell_center
+            self.pad_periodic_BC           = self.pad_periodic_BC_cell_center
     
     # Operate on fields
     def to_backend(self, field):
@@ -114,93 +115,97 @@ class VoxelGrid:
         kx, ky, kz = self.lib.meshgrid(fft_axes[0], fft_axes[1], rfft_axes[2], indexing='ij')
         return kx**2 + ky**2 + kz**2
     
-    def pad_with_ghost_nodes(self, field):
-        """Pad ``field`` and drop unused ghost nodes for staggered grids."""
-        field = self.pad_periodic(field)
-        if self.convention == 'staggered_x':
-            # For staggered grid we don't need ghost nodes in x
-            field = field[:,1:-1,:,:]
-        return field
-
-    def return_inner_values(self, field):
-        """Return the values without ghost nodes."""
-        if self.convention == 'staggered_x':
-            inner_field = field[:,:,1:-1,1:-1]
-        else :
-            inner_field = field[:,1:-1,1:-1,1:-1]
-        return inner_field
-
-    def init_field_from_numpy(self, array: np.ndarray):
+    def init_scalar_field(self, array):
         """Convert and pad a NumPy array for simulation."""
         field = self.to_backend(array)
         field = self.expand_dim(field, 0)
         return field
+    
+    def trim_boundary_nodes_cell_center(self, field):
+        return field
+    
+    def trim_boundary_nodes_staggered_x(self, field):
+        """Trim boundary nodes of ``field`` for staggered grids."""
+        if field.shape[1] == self.shape[0]:
+            return field[:,1:-1,:,:]
+        else:
+            raise ValueError(
+                f"The provided field must have the shape {self.shape}."
+            )
+    
+    def trim_ghost_nodes(self, field):
+        if (self.convention == 'cell_center') and \
+           (field[0,1:-1,1:-1,1:-1].shape == self.shape):
+            return field[:,1:-1,1:-1,1:-1]
+        elif (self.convention == 'staggered_x') and \
+             (field[0,:,1:-1,1:-1].shape == self.shape):
+            return field[:,:,1:-1,1:-1]
+        else:
+            raise ValueError(
+                f"The provided field has the wrong shape {self.shape}."
+            )
 
-    def export_field_to_numpy(self, field):
+    def export_scalar_field_to_numpy(self, field):
         """Export backend field back to NumPy."""
         array = self.to_numpy(self.squeeze(field, 0))
         return array
     
     def calc_field_average(self, field):
-        # TODO: this currently only works for batch dimension of 1
         """Return the spatial average of ``field``."""
-        inner_field = self.return_inner_values(field)
-        if self.convention == 'cell_center':
-            average = self.lib.mean(inner_field)
-        elif self.convention == 'staggered_x':
-            # Count first and last slice as half cells
-            average = self.lib.sum(inner_field[1:-1,:,:]) \
-                      + 0.5*self.lib.sum(inner_field[ 0,:,:]) \
-                      + 0.5*self.lib.sum(inner_field[-1,:,:])
-            average /= self.size
+        if field.shape[1:] == self.shape:
+            if self.convention == 'cell_center':
+                average = self.lib.mean(field, (1,2,3))
+            elif self.convention == 'staggered_x':
+                # Count first and last slice as half cells
+                average = self.lib.sum(field[:,1:-1,:,:], (1,2,3)) \
+                        + 0.5*self.lib.sum(field[:, 0,:,:], (1,2,3)) \
+                        + 0.5*self.lib.sum(field[:,-1,:,:], (1,2,3))
+                average /= (self.shape[0]-1) * self.shape[1] * self.shape[2]
+        else:
+            raise ValueError(
+                f"The provided field must have the shape {self.shape}."
+            )
         return average
-    
-    def _apply_yz_periodic(self, field):
-        """Helper to apply periodic boundaries in y and z directions."""
-        field = self.set(field, (__,__, 0,__), field[:,:,-2,:])
-        field = self.set(field, (__,__,-1,__), field[:,:, 1,:])
-        field = self.set(field, (__,__,__, 0), field[:,:,:,-2])
-        field = self.set(field, (__,__,__,-1), field[:,:,:, 1])
-        return field
 
-    def apply_periodic_BC_cell_center(self, field):
+    def pad_periodic_BC_cell_center(self, field):
         """
         Periodic boundary conditions in all directions.
         Consistent with cell centered grid.
         """
-        field = self.set(field, (__, 0,__,__), field[:,-2,:,:])
-        field = self.set(field, (__,-1,__,__), field[:, 1,:,:])
-        return self._apply_yz_periodic(field)
+        return self.pad_periodic(field)
     
-    def apply_periodic_BC_staggered_x(self, field):
+    def pad_periodic_BC_staggered_x(self, field):
         raise NotImplementedError
     
-    def apply_dirichlet_periodic_BC_cell_center(self, field, bc0=0, bc1=0):
+    def pad_dirichlet_periodic_BC_cell_center(self, field, bc0=0, bc1=0):
         """
         Homogenous Dirichlet boundary conditions in x-drection,
         periodic in y- and z-direction. Consistent with cell centered grid,
         but loss of 2nd order convergence.
         """
-        field = self.set(field, (__, 0,__,__), 2.0*bc0 - field[:, 1,:,:])
-        field = self.set(field, (__,-1,__,__), 2.0*bc1 - field[:,-2,:,:])
-        return self._apply_yz_periodic(field)
+        padded = self.pad_periodic(field)
+        padded = self.set(padded, (__, 0,__,__), 2.0*bc0 - padded[:, 1,:,:])
+        padded = self.set(padded, (__,-1,__,__), 2.0*bc1 - padded[:,-2,:,:])
+        return padded
     
-    def apply_dirichlet_periodic_BC_staggered_x(self, field, bc0=0, bc1=0):
+    def pad_dirichlet_periodic_BC_staggered_x(self, field, bc0=0, bc1=0):
         """
         Homogenous Dirichlet boundary conditions in x-drection,
         periodic in y- and z-direction. Consistent with staggered_x grid,
         maintains 2nd order convergence.
         """
-        field = self.set(field, (__, 0,__,__), bc0)
-        field = self.set(field, (__,-1,__,__), bc1)
-        return self._apply_yz_periodic(field)
+        padded = self.pad_periodic(field)
+        padded = self.set(padded, (__, 0,__,__), bc0)
+        padded = self.set(padded, (__,-1,__,__), bc1)
+        return padded
     
-    def apply_zero_flux_periodic_BC_cell_center(self, field):
-        field = self.set(field, (__, 0,__,__), field[:, 1,:,:])
-        field = self.set(field, (__,-1,__,__), field[:,-2,:,:])
-        return self._apply_yz_periodic(field)
+    def pad_zero_flux_periodic_BC_cell_center(self, field):
+        padded = self.pad_periodic(field)
+        padded = self.set(padded, (__, 0,__,__), padded[:, 1,:,:])
+        padded = self.set(padded, (__,-1,__,__), padded[:,-2,:,:])
+        return padded
 
-    def apply_zero_flux_periodic_BC_staggered_x(self, field):
+    def pad_zero_flux_periodic_BC_staggered_x(self, field):
         """
         The following comes out of on interpolation polynomial p with
         p'(0) = 0, p(dx) = f(dx,...), p(2*dx) = f(2*dx,...)
@@ -208,11 +213,12 @@ class VoxelGrid:
         This should be of sufficient order of f'(0) = 0, and even better if
         also f'''(0) = 0 (as it holds for cos(k*pi*x)  )
         """
+        padded = self.pad_periodic(field)
         fac1 =  4/3
         fac2 =  1/3
-        field = self.set(field, (__, 0,__,__), fac1*field[:, 1,:,:] - fac2*field[:, 2,:,:])
-        field = self.set(field, (__,-1,__,__), fac1*field[:,-2,:,:] - fac2*field[:,-3,:,:])
-        return self._apply_yz_periodic(field)
+        padded = self.set(padded, (__, 0,__,__), fac1*padded[:, 1,:,:] - fac2*padded[:, 2,:,:])
+        padded = self.set(padded, (__,-1,__,__), fac1*padded[:,-2,:,:] - fac2*padded[:,-3,:,:])
+        return padded
 
     def calc_laplace(self, field):
         """

@@ -1,10 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 import sympy.vector as spv
 from .voxelgrid import VoxelGrid
 
 class ODE(ABC):
+    @property
+    @abstractmethod
+    def order(self):
+        """Spatial order of convergence for numerical right-hand side."""
+        pass
+
     @abstractmethod
     def rhs_analytic(self, u, t):
         """Sympy expression of the problem right-hand side.
@@ -31,11 +37,21 @@ class ODE(ABC):
         """
         pass
 
-    @property
     @abstractmethod
-    def order(self):
-        """Spatial order of convergence for numerical right-hand side."""
+    def pad_boundary_conditions(self, u):
+        """Function to pad and impose boundary conditions.
+
+        Enables applying boundary conditions on u outside of
+        the right-hand-side function.
+
+        Args:
+            u : field
+
+        Returns:
+            Field padded with boundary values.
+        """
         pass
+
 
 class SpectralODE(ODE):
     @property
@@ -43,6 +59,52 @@ class SpectralODE(ODE):
     def spectral_factor(self):
         """Spectral factor required for spectral ODE solvers."""
         pass
+
+
+@dataclass
+class PoissonEquation(SpectralODE):
+    vg: VoxelGrid
+    D: float
+    f: Callable
+    BC_type: str
+    bcs: tuple = (0,0)
+    A: float = 0.25
+    _spectral_factor: Any = field(init=False, repr=False)
+
+    def __post_init__(self):
+        """Precompute factors required by the spectral solver."""
+        k_squared = self.vg.rfft_k_squared()
+        self._spectral_factor = self.D * self.A * k_squared**2
+
+        if self.BC_type == 'periodic':
+            bc_fun = self.vg.pad_periodic_BC
+            self.pad_bcs = lambda field, bc0, bc1: bc_fun(field)
+        elif self.BC_type == 'dirichlet':
+            self.pad_bcs = self.vg.pad_dirichlet_periodic_BC
+        elif self.BC_type == 'neumann':
+            bc_fun = self.vg.pad_zero_flux_periodic_BC
+            self.pad_bcs = lambda field, bc0, bc1: bc_fun(field)
+    
+    @property
+    def order(self):
+        return 2
+
+    @property
+    def spectral_factor(self):
+        return self._spectral_factor
+    
+    def pad_boundary_conditions(self, u):
+        fun = lambda u: self.pad_bcs(u, self.bcs[0], self.bcs[1])
+        return fun(u)
+    
+    def rhs_analytic(self, u, t):
+        return self.D*spv.laplacian(u) + self.f(u, t)
+    
+    def rhs(self, u, t):
+        laplace = self.vg.calc_laplace(self.pad_bcs(u, self.bcs[0], self.bcs[1]))
+        update = self.D * laplace + self.f(u, t)
+        return update
+
 
 @dataclass
 class PeriodicCahnHilliard(SpectralODE):
@@ -65,6 +127,9 @@ class PeriodicCahnHilliard(SpectralODE):
     @property
     def spectral_factor(self):
         return self._spectral_factor
+    
+    def pad_boundary_conditions(self, u):
+        return self.vg.pad_periodic_BC(u)
     
     def rhs_analytic(self, c, t):
         mu = 18/self.eps*c*(1-c)*(1-2*c) - 2*self.eps*spv.laplacian(c)
@@ -129,12 +194,10 @@ class PeriodicCahnHilliard(SpectralODE):
         Returns:
             Backend array of the same shape as ``c`` containing ``dc/dt``.
         """
-        c_BC = self.vg.pad_with_ghost_nodes(c)
-        c_BC = self.vg.apply_periodic_BC(c_BC)
+        c_BC = self.vg.pad_periodic_BC(c)
         laplace = self.vg.calc_laplace(c_BC)
         mu = 18/self.eps*c*(1-c)*(1-2*c) - 2*self.eps*laplace
-        mu = self.vg.pad_zeros(mu)
-        mu = self.vg.apply_periodic_BC(mu)
+        mu = self.vg.pad_periodic_BC(mu)
         divergence = self.calc_divergence_variable_mobility(mu, c_BC)
         # divergence = self.calc_divergence_variable_mobility(self.mu(c), c)
         return self.D * divergence

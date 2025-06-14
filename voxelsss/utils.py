@@ -8,7 +8,6 @@ def rhs_convergence_test(
     ODE_class,       # an ODE class with callable rhs(field, t)->torch.Tensor (shape [x,y,z])
     problem_kwargs,  # problem parameters to instantiate ODE
     test_function,   # exact init_fun(x,y,z)->np.ndarray
-    # exact_fun,     # exact_fun(x,y,z)->np.ndarray
     convention='cell_center',
     dtype='float32',
     powers = np.array([3,4,5,6,7]),
@@ -32,22 +31,22 @@ def rhs_convergence_test(
             vg = vox.voxelgrid.VoxelGridTorch(vf.grid_info(), precision=vf.precision, device='cpu')
         elif backend == 'jax':
             vg = vox.voxelgrid.VoxelGridJax(vf.grid_info(), precision=vf.precision)
-        field = vg.init_field_from_numpy(init_data)
+        field = vg.init_scalar_field(init_data)
+        field = vg.trim_boundary_nodes(field)
         ODE = ODE_class(vg, **problem_kwargs)
 
         # Compute solutions
-        comp = vg.export_field_to_numpy(ODE.rhs(field, 0))
+        comp = vg.export_scalar_field_to_numpy(ODE.rhs(field, 0))
         exact_fun = ODE.rhs_analytic(test_function, 0)
         exact_fun = sp.lambdify((CS.x, CS.y, CS.z), exact_fun, "numpy")
         exact = exact_fun(*grid)
         if convention == 'staggered_x':
-            comp = comp[1:-1,:,:]
             exact = exact[1:-1,:,:]
 
         # Error norm
         diff = comp - exact
         errors[i] = np.linalg.norm(diff)/np.linalg.norm(exact)
-        dx[i]     = vf.spacing[0]
+        dx[i] = vf.spacing[0]
 
         # Fit slope
     slope, _ = np.polyfit(np.log(dx), np.log(errors), 1)
