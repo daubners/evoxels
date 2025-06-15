@@ -31,7 +31,7 @@ Basic attributes are the grid size (Nx, Ny, Nz), the length of physical domain (
 The class comes with some comfort features like adding a corresponding meshgrid, plotting slices, interactive plotting of the whole 3D structure and data export to vtk for further visualization.
 
 The solvers are currently under development.
-At this stage, the binary Cahn-Hilliard solver can be used as a reference for computational performance. Especially the ``method = 'mixed_FFT'`` achieves high computational performance thanks to optimized time-stepping in combination with fast matrix operations from pytorch.
+At this stage, the binary Cahn-Hilliard solver can be used as a reference for computational performance. The precompiled version achieves high computational performance thanks to optimized time-stepping in combination with fast matrix operations on GPU backends.
 
 ## Installation
 
@@ -55,7 +55,19 @@ pip install -e .[torch] # install with torch backend
 pip install -e .[jax]   # install with jax backend
 pip install -e .[torch, dev, notebooks] # also install testing and notebooks
 ```
-To work with the example notebooks install Jupyter as well install all notebook related dependencies via
+Note that the default `[jax]` and `[torch]` installation will be CPU compatible. To install the corresponsing CUDA libraries check your CUDA version with
+```bash
+nvidia-smi
+```
+then install the CUDA-enabled JAX backend via (in this case for CUDA version 12)
+```bash
+pip install -U "jax[cuda12]"
+```
+or install the CUDA-enabled pytorch backend via
+```bash
+pip install torch
+```
+To work with the example notebooks install Jupyter and all notebook related dependencies via
 ```
 pip install -e .[notebooks]
 ```
@@ -83,10 +95,13 @@ vf.add_field("c", noise)
 
 dt = 0.1
 final_time = 100
-iter = int(final_time/dt)
-sim = vox.PeriodicCahnHilliardSolver(vf, "c", device='cuda')
-sim.solve(method='mixed_FFT', time_increment=dt, frames=10, max_iters=iter, \
-          verbose='plot', vtk_out=False, plot_bounds=(0,1))
+steps = int(final_time/dt)
+
+vox.run_cahn_hilliard_solver(
+    vf, 'c', 'torch', jit=True, device='cuda',
+    time_increment=dt, frames=10, max_iters=steps,
+    verbose='plot', vtk_out=False, plot_bounds=(0,1)
+  )
 ```
 As the simulation is running, the "c" field will be overwritten each frame. Therefore, ``vf.fields["c"]`` will give you the last frame of the simulation. This code design has been chosen specifically for large data such that the RAM requirements are rather low.
 For visual inspection of your simulation results, you can plot individual slices (e.g. slice=10) for a given direction (e.g. x)
