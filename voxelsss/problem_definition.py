@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable
+import sympy as sp
 import sympy.vector as spv
 from .voxelgrid import VoxelGrid
 
@@ -65,9 +66,9 @@ class SpectralODE(ODE):
 class PoissonEquation(SpectralODE):
     vg: VoxelGrid
     D: float
-    f: Callable
     BC_type: str
     bcs: tuple = (0,0)
+    f: Callable | None = None
     A: float = 0.25
     _spectral_factor: Any = field(init=False, repr=False)
 
@@ -75,6 +76,8 @@ class PoissonEquation(SpectralODE):
         """Precompute factors required by the spectral solver."""
         k_squared = self.vg.rfft_k_squared()
         self._spectral_factor = self.D * self.A * k_squared**2
+        if self.f is None:
+            self.f = lambda c=None, t=None, lib=None: 0
 
         if self.BC_type == 'periodic':
             bc_fun = self.vg.pad_periodic_BC
@@ -92,16 +95,23 @@ class PoissonEquation(SpectralODE):
     @property
     def spectral_factor(self):
         return self._spectral_factor
+    
+    def _eval_f(self, c, t, lib):
+        """Evaluate source/forcing term using ``self.f``."""
+        try:
+            return self.f(c, t, lib)
+        except TypeError:
+            return self.f(c, t)
 
     def pad_boundary_conditions(self, u):
         return self.pad_bcs(u, self.bcs[0], self.bcs[1])
     
     def rhs_analytic(self, u, t):
-        return self.D*spv.laplacian(u) + self.f(u, t)
+        return self.D*spv.laplacian(u) + self._eval_f(u, t, sp)
     
     def rhs(self, u, t):
         laplace = self.vg.calc_laplace(self.pad_bcs(u, self.bcs[0], self.bcs[1]))
-        update = self.D * laplace + self.f(u, t)
+        update = self.D * laplace + self._eval_f(u, t, self.vg.lib)
         return update
 
 
@@ -109,15 +119,17 @@ class PoissonEquation(SpectralODE):
 class PeriodicCahnHilliard(SpectralODE):
     vg: VoxelGrid
     eps: float
-    # mu: Callable
-    D: float #Callable
-    A: float
+    D: float = 1.0
+    mu_hom: Callable | None = None
+    A: float = 0.25
     _spectral_factor: Any = field(init=False, repr=False)
     
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         k_squared = self.vg.rfft_k_squared()
         self._spectral_factor = 2 * self.eps * self.D * self.A * k_squared**2
+        if self.mu_hom is None:
+            self.mu_hom = lambda c, lib=None: 18 / self.eps * c * (1 - c) * (1 - 2 * c)
     
     @property
     def order(self):
@@ -130,8 +142,15 @@ class PeriodicCahnHilliard(SpectralODE):
     def pad_boundary_conditions(self, u):
         return self.vg.pad_periodic_BC(u)
     
+    def _eval_mu(self, c, lib):
+        """Evaluate homogeneous chemical potential using ``self.mu``."""
+        try:
+            return self.mu_hom(c, lib)
+        except TypeError:
+            return self.mu_hom(c)
+
     def rhs_analytic(self, c, t):
-        mu = 18/self.eps*c*(1-c)*(1-2*c) - 2*self.eps*spv.laplacian(c)
+        mu = self._eval_mu(c, sp) - 2*self.eps*spv.laplacian(c)
         fluxes = self.D*c*(1-c)*spv.gradient(mu)
         rhs = spv.divergence(fluxes)
         return rhs
@@ -195,8 +214,7 @@ class PeriodicCahnHilliard(SpectralODE):
         """
         c_BC = self.vg.pad_periodic_BC(c)
         laplace = self.vg.calc_laplace(c_BC)
-        mu = 18/self.eps*c*(1-c)*(1-2*c) - 2*self.eps*laplace
+        mu = self._eval_mu(c, self.vg.lib) - 2*self.eps*laplace
         mu = self.vg.pad_periodic_BC(mu)
         divergence = self.calc_divergence_variable_mobility(mu, c_BC)
-        # divergence = self.calc_divergence_variable_mobility(self.mu(c), c)
         return self.D * divergence
