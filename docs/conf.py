@@ -21,7 +21,15 @@ myst_enable_extensions = [
 
 nb_execution_mode = 'off'
 html_theme = 'sphinx_rtd_theme'
-autodoc_mock_imports = ['matplotlib', 'pyvista', 'psutil', 'IPython', 'numpy', 'torch']
+autodoc_mock_imports = [
+    'matplotlib',
+    'pyvista',
+    'psutil',
+    'IPython',
+    'numpy',
+    'torch',
+    'sympy'
+]
 exclude_patterns = ['_build']
 
 # Copy images referenced in the README so they appear on ReadTheDocs.
