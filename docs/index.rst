@@ -7,7 +7,7 @@ Welcome to the voxelsss documentation!
 
    readme
    notebooks/00-using-voxelfields.ipynb
-   notebooks/01-Cahn-Hilliard-solvers.ipynb
+   notebooks/01-using-solvers.ipynb
    api
    contributing
    authors
