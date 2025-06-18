@@ -28,6 +28,7 @@ autodoc_mock_imports = [
     'IPython',
     'numpy',
     'torch',
+    'jax',
     'sympy'
 ]
 exclude_patterns = ['_build']
