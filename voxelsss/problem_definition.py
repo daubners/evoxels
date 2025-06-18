@@ -191,7 +191,7 @@ class PeriodicCahnHilliard(SpectralODE):
         return divergence
 
     def rhs(self, c, t):
-        """Evaluate :math:`\partial c / \partial t` for the CH equation.
+        r"""Evaluate :math:`\partial c / \partial t` for the CH equation.
 
         Numerical computation of
 
@@ -212,6 +212,7 @@ class PeriodicCahnHilliard(SpectralODE):
         Returns:
             Backend array of the same shape as ``c`` containing ``dc/dt``.
         """
+        c = self.vg.lib.clip(c, 0, 1)
         c_BC = self.vg.pad_periodic_BC(c)
         laplace = self.vg.calc_laplace(c_BC)
         mu = self._eval_mu(c, self.vg.lib) - 2*self.eps*laplace

@@ -35,7 +35,15 @@ At this stage, the binary Cahn-Hilliard solver can be used as a reference for co
 
 ## Installation
 
-Can be installed by cloning the repository
+TL;DR
+```bash
+conda create --name voxenv python=3.12
+conda activate voxenv
+pip install voxelsss[torch, jax, dev, notebooks]
+pip install --upgrade "jax[cuda12]"
+```
+
+The package is available on pypi but can also be installed by cloning the repository
 ```
 git clone git@github.com:daubners/voxelsss.git
 ```
@@ -46,16 +54,16 @@ that the dependencies do not interfere with your system packages. Create and
 activate a virtual environment e.g. using miniconda
 
 ```bash
-conda create --name myenv python=3.11
+conda create --name myenv python=3.12
 conda activate myenv
 ```
 Navigate to the voxelsss folder, then
 ```
 pip install -e .[torch] # install with torch backend
 pip install -e .[jax]   # install with jax backend
-pip install -e .[torch, dev, notebooks] # also install testing and notebooks
+pip install -e .[dev, notebooks] # install testing and notebooks
 ```
-Note that the default `[jax]` and `[torch]` installation will be CPU compatible. To install the corresponsing CUDA libraries check your CUDA version with
+Note that the default `[jax]` installation is only CPU compatible. To install the corresponding CUDA libraries check your CUDA version with
 ```bash
 nvidia-smi
 ```
@@ -63,9 +71,10 @@ then install the CUDA-enabled JAX backend via (in this case for CUDA version 12)
 ```bash
 pip install -U "jax[cuda12]"
 ```
-or install the CUDA-enabled pytorch backend via
+To install both backends within one environment it is important to install torch first and then upgrade the `jax` installation e.g.
 ```bash
-pip install torch
+pip install voxelsss[torch, jax, dev, notebooks]
+pip install --upgrade "jax[cuda12]"
 ```
 To work with the example notebooks install Jupyter and all notebook related dependencies via
 ```

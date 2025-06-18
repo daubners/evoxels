@@ -10,9 +10,10 @@ class OneVariableTimeDependendSolver:
 
     vf: Any  # VoxelFields object
     fieldname: str
-    problem_cls: Type
-    timestepper_fn: Callable
     backend: str
+    problem_cls: Type | None = None
+    timestepper_fn: Callable | None = None
+    step_fn: Callable | None = None
     device: str='cuda'
 
     def __post_init__(self):
@@ -21,13 +22,13 @@ class OneVariableTimeDependendSolver:
             from .voxelgrid import VoxelGridTorch
             from .profiler import TorchMemoryProfiler
             grid = self.vf.grid_info()
-            self.vg = VoxelGridTorch(grid, device=self.device)
+            self.vg = VoxelGridTorch(grid, precision=self.vf.precision, device=self.device)
             self.profiler = TorchMemoryProfiler(self.vg.device)
 
         elif self.backend == 'jax':
             from .voxelgrid import VoxelGridJax
             from .profiler import JAXMemoryProfiler
-            self.vg = VoxelGridJax(self.vf.grid_info())
+            self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
             self.profiler = JAXMemoryProfiler()
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
@@ -58,10 +59,18 @@ class OneVariableTimeDependendSolver:
         """
 
         problem_kwargs = problem_kwargs or {}
-        self.problem = self.problem_cls(self.vg, **problem_kwargs)
         u = self.vg.init_scalar_field(self.vf.fields[self.fieldname])
         u = self.vg.trim_boundary_nodes(u)
-        step_fn = self.timestepper_fn(self.problem, time_increment)
+
+        if self.step_fn is not None:
+            step_fn = self.step_fn
+            self.problem = None
+        else:
+            if self.problem_cls is None or self.timestepper_fn is None:
+                raise ValueError("Either provide step_fn or both problem_cls and timestepper_fn")
+            self.problem = self.problem_cls(self.vg, **problem_kwargs)
+            step_fn = self.timestepper_fn(self.problem, time_increment)
+
         # Make use of just-in-time compilation
         if jit and self.backend == 'jax':
             import jax
@@ -92,7 +101,10 @@ class OneVariableTimeDependendSolver:
 
     def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds):
         """Store results and optionally plot or write them to disk."""
-        u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
+        if getattr(self, 'problem', None) is not None:
+            u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
+        else:
+            u_out = u
         self.vf.fields[self.fieldname] = self.vg.export_scalar_field_to_numpy(u_out)
 
         if verbose:
