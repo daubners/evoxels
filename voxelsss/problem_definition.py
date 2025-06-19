@@ -269,19 +269,16 @@ class AllenCahnEquation(SpectralODE):
         return self.M * self.gab * df_dphi
 
     def rhs(self, phi, t):
-        r"""Microstructure evolution with the two-phase Allen-Cahn equationartial \phi / \partial t` for the CH equation.
-
-        Numerical computation of
-
-        .. math::
-            \frac{\partial c}{\partial t}
-            = \nabla \cdot \bigl( M \, \nabla \mu \bigr),
-            \quad
-            \mu = \frac{\delta F}{\delta c}
-            = f'(c) - \kappa \, \nabla^2 c
-
-        where :math:`M` is the (possibly concentration-dependent) mobility,
-        :math:`\mu` the chemical potential, and :math:`\kappa` the gradient energy coefficient.
+        r"""Two-phase Allen-Cahn equation
+        
+        Microstructural evolution of the order parameter ``\phi``
+        which can be interpreted as a phase fraction.
+        :math:`M` denotes the mobility,
+        :math:`\epsilon` controls the diffuse interface width,
+        :math:`\gamma` denotes the interfacial energy.
+        The laplacian leads to a phase evolution driven by
+        curvature minimization which can be controlled by setting
+        ``curvature=`` in range :math:`[0,1]`.
 
         Args:
             phi (array-like): order parameter.
