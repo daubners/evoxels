@@ -3,9 +3,17 @@ import warnings
 from dataclasses import dataclass
 from typing import Tuple, Any
 
-# Shorthand for all elements [:] in slicing logic
-__ = slice(None)
+# Shorthands in slicing logic
+__ = slice(None)    # all elements [:]
+_i_ = slice(1, -1)  # inner elements [1:-1]
 
+CENTER = (__,  _i_, _i_, _i_)
+LEFT   = (__, slice(None,-2), _i_, _i_)
+RIGHT  = (__, slice(2, None), _i_, _i_)
+BOTTOM = (__, _i_, slice(None,-2), _i_)
+TOP    = (__, _i_, slice(2, None), _i_)
+BACK   = (__, _i_, _i_, slice(None,-2))
+FRONT  = (__, _i_, _i_, slice(2, None))
 
 @dataclass
 class Grid:
@@ -27,6 +35,7 @@ class VoxelGrid:
         self.lib = lib
 
         # Other grid information
+        self.div_dx = 1/self.to_backend(np.array(self.spacing))
         self.div_dx2 = 1/self.to_backend(np.array(self.spacing))**2
 
         # Boundary conditions
@@ -35,11 +44,13 @@ class VoxelGrid:
             self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_staggered_x
             self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_staggered_x
             self.pad_periodic_BC           = self.pad_periodic_BC_staggered_x
+            self.pad_zero_flux_BC          = self.pad_zero_flux_BC_staggered_x
         else:
             self.trim_boundary_nodes       = self.trim_boundary_nodes_cell_center
             self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_cell_center
             self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_cell_center
             self.pad_periodic_BC           = self.pad_periodic_BC_cell_center
+            self.pad_zero_flux_BC          = self.pad_zero_flux_BC_cell_center
     
     # Operate on fields
     def to_backend(self, field):
@@ -204,6 +215,19 @@ class VoxelGrid:
         padded = self.set(padded, (__, 0,__,__), padded[:, 1,:,:])
         padded = self.set(padded, (__,-1,__,__), padded[:,-2,:,:])
         return padded
+    
+    def pad_zero_flux_BC_cell_center(self, field):
+        padded = self.pad_zeros(field)
+        padded = self.set(padded, (__, 0,__,__), padded[:, 1,:,:])
+        padded = self.set(padded, (__,-1,__,__), padded[:,-2,:,:])
+        padded = self.set(padded, (__,__, 0,__), padded[:,:, 1,:])
+        padded = self.set(padded, (__,__,-1,__), padded[:,:,-2,:])
+        padded = self.set(padded, (__,__,__, 0), padded[:,:,:, 1])
+        padded = self.set(padded, (__,__,__,-1), padded[:,:,:,-2])
+        return padded
+
+    def pad_zero_flux_BC_staggered_x(self, field):
+        raise NotImplementedError
 
     def pad_zero_flux_periodic_BC_staggered_x(self, field):
         """
@@ -219,20 +243,62 @@ class VoxelGrid:
         padded = self.set(padded, (__, 0,__,__), fac1*padded[:, 1,:,:] - fac2*padded[:, 2,:,:])
         padded = self.set(padded, (__,-1,__,__), fac1*padded[:,-2,:,:] - fac2*padded[:,-3,:,:])
         return padded
+    
+    def grad_x(self, field):
+        return 0.5 * (field[RIGHT] - field[LEFT]) * self.div_dx[0]
+
+    def grad_y(self, field):
+        return 0.5 * (field[TOP] - field[BOTTOM]) * self.div_dx[1]
+
+    def grad_z(self, field):
+        return 0.5 * (field[FRONT] - field[BACK]) * self.div_dx[2]
+
+    def calc_gradient_norm_squared(self, field):
+        """Gradient norm squared"""
+        return self.grad_x(field)**2 + self.grad_y(field)**2 + self.grad_z(field)**2
 
     def calc_laplace(self, field):
-        """
-        Calculate laplace based on compact 2nd order stencil.
+        r"""Calculate laplace based on compact 2nd order stencil.
+
+        Laplace given as $\nabla\cdot(\nabla u)$ which in 3D is given by
+        $\partial^2 u/\partial^2 x + \partial^2 u/\partial^2 y+ \partial^2 u/\partial^2 z$
         Returned field has same shape as the input field (padded with zeros)
         """
         # Manual indexing is ~10x faster than conv3d with laplace kernel in torch
         laplace = \
-            (field[:, 2:, 1:-1, 1:-1] + field[:, :-2, 1:-1, 1:-1]) * self.div_dx2[0] + \
-            (field[:, 1:-1, 2:, 1:-1] + field[:, 1:-1, :-2, 1:-1]) * self.div_dx2[1] + \
-            (field[:, 1:-1, 1:-1, 2:] + field[:, 1:-1, 1:-1, :-2]) * self.div_dx2[2] - \
-             2 * field[:, 1:-1, 1:-1, 1:-1] * self.lib.sum(self.div_dx2)
+            (field[RIGHT] + field[LEFT]) * self.div_dx2[0] + \
+            (field[TOP] + field[BOTTOM]) * self.div_dx2[1] + \
+            (field[FRONT] + field[BACK]) * self.div_dx2[2] - \
+             2 * field[CENTER] * self.lib.sum(self.div_dx2)
         return laplace
+    
+    def calc_normal_laplace(self, field):
+        r"""Calculate the normal component of the laplacian
 
+        which is identical to the full laplacian minus curvature.
+        It is defined as $\partial^2_n u = \nabla\cdot(\nabla u\cdot n)\cdot n$
+        where $n$ denotes the surface normal.
+        In the context of phasefield models $n$ is defined as
+        $\frac{\nabla u}{|\nabla u|}$.
+        The calaculation is based on a compact 2nd order stencil.
+        """
+        n_laplace =\
+            self.grad_x(field)**2 * (field[RIGHT] - 2*field[CENTER] + field[LEFT]) * self.div_dx2[0] +\
+            self.grad_y(field)**2 * (field[TOP] - 2*field[CENTER] + field[BOTTOM]) * self.div_dx2[1]+\
+            self.grad_z(field)**2 * (field[FRONT] - 2*field[CENTER] + field[BACK]) * self.div_dx2[2]+\
+            0.5 * self.grad_x(field) * self.grad_y(field) *\
+                  (field[:,2:,2:,1:-1] + field[:,:-2,:-2,1:-1] -\
+                   field[:,:-2,2:,1:-1] - field[:,2:,:-2,1:-1]) * self.div_dx[0] * self.div_dx[1] +\
+            0.5 *self.grad_x(field) * self.grad_z(field) *\
+                  (field[:,2:,1:-1,2:] + field[:,:-2,1:-1,:-2] -\
+                   field[:,:-2,1:-1,2:] - field[:,2:,1:-1,:-2]) * self.div_dx[0] * self.div_dx[2] +\
+            0.5 * self.grad_y(field) * self.grad_z(field) *\
+                  (field[:,1:-1,2:,2:] + field[:,1:-1,:-2,:-2] -\
+                   field[:,1:-1,:-2,2:] - field[:,1:-1,2:,:-2]) * self.div_dx[1] * self.div_dx[2]
+        norm2 = self.calc_gradient_norm_squared(field)
+        bulk = self.lib.where(norm2 <= 1e-7)
+        norm2 = self.set(norm2, bulk, 1.0)
+        return n_laplace/norm2
 
 class VoxelGridTorch(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32', device: str='cuda'):
