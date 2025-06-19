@@ -206,7 +206,7 @@ class PeriodicCahnHilliard(SpectralODE):
         :math:`\mu` the chemical potential, and :math:`\kappa` the gradient energy coefficient.
 
         Args:
-            c (array-like): Concentration field padded with ghost nodes.
+            c (array-like): Concentration field.
             t (float): Current time.
 
         Returns:
@@ -219,3 +219,78 @@ class PeriodicCahnHilliard(SpectralODE):
         mu = self.vg.pad_periodic_BC(mu)
         divergence = self.calc_divergence_variable_mobility(mu, c_BC)
         return self.D * divergence
+
+
+@dataclass
+class AllenCahnEquation(SpectralODE):
+    vg: VoxelGrid
+    eps: float = 2.0
+    gab: float = 1.0
+    M: float = 1.0
+    curvature: float = 0.01
+    potential: Callable | None = None
+    _spectral_factor: Any = field(init=False, repr=False)
+    
+    def __post_init__(self):
+        """Precompute factors required by the spectral solver."""
+        k_squared = self.vg.rfft_k_squared()
+        self._spectral_factor = 2 * self.M * self.gab* k_squared
+        if self.potential is None:
+            self.potential = lambda u, lib=None: 18 / self.eps * u * (1-u) * (1-2*u)
+    
+    @property
+    def order(self):
+        return 2
+
+    @property
+    def spectral_factor(self):
+        return self._spectral_factor
+
+    def pad_boundary_conditions(self, u):
+        return self.vg.pad_zero_flux_BC(u)
+
+    def _eval_potential(self, phi, lib):
+        """Evaluate phasefield potential"""
+        try:
+            return self.potential(phi, lib)
+        except TypeError:
+            return self.potential(phi)
+
+    def rhs_analytic(self, phi, t):
+        grad = spv.gradient(phi)
+        laplace  = spv.laplacian(phi)
+        norm_grad = sp.sqrt(grad.dot(grad))
+
+        # Curvature equals |∇ψ| ∇·(∇ψ/|∇ψ|)
+        unit_normal = grad / norm_grad
+        curv = norm_grad * spv.divergence(unit_normal)
+        n_laplace = laplace - (1-self.curvature)*curv
+        df_dphi = 2*n_laplace - self._eval_potential(phi, sp)/self.eps
+        return self.M * self.gab * df_dphi
+
+    def rhs(self, phi, t):
+        r"""Two-phase Allen-Cahn equation
+        
+        Microstructural evolution of the order parameter ``\phi``
+        which can be interpreted as a phase fraction.
+        :math:`M` denotes the mobility,
+        :math:`\epsilon` controls the diffuse interface width,
+        :math:`\gamma` denotes the interfacial energy.
+        The laplacian leads to a phase evolution driven by
+        curvature minimization which can be controlled by setting
+        ``curvature=`` in range :math:`[0,1]`.
+
+        Args:
+            phi (array-like): order parameter.
+            t (float): Current time.
+
+        Returns:
+            Backend array of the same shape as ``\phi`` containing ``d\phi/dt``.
+        """
+        phi = self.vg.lib.clip(phi, 0, 1)
+        potential = self._eval_potential(phi, self.vg.lib)
+        phi_pad = self.vg.pad_zero_flux_BC(phi)
+        laplace = self.curvature*self.vg.calc_laplace(phi_pad)
+        n_laplace = (1-self.curvature) * self.vg.calc_normal_laplace(phi_pad)
+        df_dphi = 2.0 * (laplace+n_laplace) - potential/self.eps
+        return self.M * self.gab * df_dphi
