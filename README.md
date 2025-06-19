@@ -39,7 +39,7 @@ TL;DR
 ```bash
 conda create --name voxenv python=3.12
 conda activate voxenv
-pip install voxelsss[torch, jax, dev, notebooks]
+pip install voxelsss[torch,jax,dev,notebooks]
 pip install --upgrade "jax[cuda12]"
 ```
 

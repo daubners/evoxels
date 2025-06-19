@@ -157,9 +157,6 @@ class VoxelFields:
             average /= ((self.Nx - 1) * self.Ny * self.Nz)
         return average
     
-    # TODO: not sure if those are needed here or should fully live
-    #       in the backends (voxelgrid.py)
-    # INFO: used for testing at the moment
     def axes(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ Returns the 1D coordinate arrays along each axis. """
         return tuple(
@@ -167,9 +164,6 @@ class VoxelFields:
             for i, n in enumerate(self.shape)
         )
     
-    # TODO: not sure if those are needed here or should fully live
-    #       in the backends (voxelgrid.py)
-    # INFO: used for testing at the moment
     def meshgrid(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ Returns full 3D mesh grids for each axis. """
         ax = self.axes()
@@ -242,7 +236,8 @@ class VoxelFields:
             im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap, \
                             origin='lower', extent=[start1, end1, start2, end2])
 
-        plt.colorbar(im)
+        ratio = np.clip((end2-start2)/(end1-start1), 0, 1)
+        plt.colorbar(im, shrink=ratio)
         plt.xlabel(label1)
         plt.ylabel(label2)
         if time:

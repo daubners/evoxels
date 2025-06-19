@@ -9,7 +9,7 @@ def forward_euler(problem: ODE, time_increment: float) -> TimeStepFn:
     def step_fn(u, t):
         update = time_increment * problem.rhs(u, t)
         return u + update
-    
+
     return step_fn
 
 def pseudo_spectral_IMEX(problem: SpectralODE, time_increment: float) -> TimeStepFn:
