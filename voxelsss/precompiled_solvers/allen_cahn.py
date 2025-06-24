@@ -1,11 +1,11 @@
 from ..problem_definition import AllenCahnEquation
-from ..solvers import OneVariableTimeDependendSolver
+from ..solvers import TimeDependendSolver
 from ..timesteppers import forward_euler
 from typing import Callable
 
 def run_allen_cahn_solver(
     voxelfields,
-    fieldname: str,
+    fieldnames: str | list[str],
     backend: str,
     jit: bool = True,
     device: str = "cuda",
@@ -24,9 +24,9 @@ def run_allen_cahn_solver(
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
     """
-    solver = OneVariableTimeDependendSolver(
+    solver = TimeDependendSolver(
         voxelfields,
-        fieldname,
+        fieldnames,
         backend,
         problem_cls = AllenCahnEquation,
         timestepper_fn = forward_euler,
