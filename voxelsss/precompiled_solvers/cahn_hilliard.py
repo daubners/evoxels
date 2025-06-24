@@ -1,5 +1,5 @@
 from ..problem_definition import PeriodicCahnHilliard
-from ..solvers import OneVariableTimeDependendSolver
+from ..solvers import TimeDependendSolver
 from ..timesteppers import pseudo_spectral_IMEX
 from typing import Callable
 
@@ -22,7 +22,7 @@ def run_cahn_hilliard_solver(
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
     """
-    solver = OneVariableTimeDependendSolver(
+    solver = TimeDependendSolver(
         voxelfields,
         fieldname,
         backend,

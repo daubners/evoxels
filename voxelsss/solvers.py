@@ -5,11 +5,11 @@ from timeit import default_timer as timer
 import sys
 
 @dataclass
-class OneVariableTimeDependendSolver:
-    """Generic wrapper for solving a single field with a time stepper."""
+class TimeDependendSolver:
+    """Generic wrapper for solving one or more fields with a time stepper."""
 
     vf: Any  # VoxelFields object
-    fieldname: str
+    fieldnames: str | list[str]
     backend: str
     problem_cls: Type | None = None
     timestepper_fn: Callable | None = None
@@ -42,7 +42,8 @@ class OneVariableTimeDependendSolver:
         jit=True,
         verbose=True,
         vtk_out=False,
-        plot_bounds=None
+        plot_bounds=None,
+        colormap='viridis'
         ):
         """Run the time integration loop.
 
@@ -59,7 +60,13 @@ class OneVariableTimeDependendSolver:
         """
 
         problem_kwargs = problem_kwargs or {}
-        u = self.vg.init_scalar_field(self.vf.fields[self.fieldname])
+        if isinstance(self.fieldnames, str):
+            self.fieldnames = [self.fieldnames]
+        else:
+            self.fieldnames = list(self.fieldnames)
+
+        u_list = [self.vg.init_scalar_field(self.vf.fields[name]) for name in self.fieldnames]
+        u = self.vg.concatenate(u_list, 0)
         u = self.vg.trim_boundary_nodes(u)
 
         if self.step_fn is not None:
@@ -87,25 +94,27 @@ class OneVariableTimeDependendSolver:
         for i in range(max_iters):
             time = i * time_increment
             if i % n_out == 0:
-                self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds)
+                self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
                 frame += 1
 
             u = step_fn(u, time)
 
         end = timer()
         time = max_iters * time_increment
-        self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds)
+        self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
 
         if verbose:
             self.profiler.print_memory_stats(start, end, max_iters)
 
-    def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds):
+    def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
             u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
         else:
             u_out = u
-        self.vf.fields[self.fieldname] = self.vg.export_scalar_field_to_numpy(u_out)
+
+        for i, name in enumerate(self.fieldnames):
+            self.vf.fields[name] = self.vg.export_scalar_field_to_numpy(u_out[i:i+1])
 
         if verbose:
             self.profiler.update_memory_stats()
@@ -115,9 +124,9 @@ class OneVariableTimeDependendSolver:
             sys.exit(1)
 
         if vtk_out:
-            filename = self.fieldname+f"_{frame:03d}.vtk"
-            self.vf.export_to_vtk(filename=filename, field_names=[self.fieldname])
-
+            filename = self.problem_cls.__name__ + "_" +\
+                       self.fieldnames[0] + f"_{frame:03d}.vtk"
+            self.vf.export_to_vtk(filename=filename, field_names=self.fieldnames)
         if verbose == 'plot':
             clear_output(wait=True)
-            self.vf.plot_slice(self.fieldname, slice_idx, time=time, value_bounds=plot_bounds)
+            self.vf.plot_slice(self.fieldnames[0], slice_idx, time=time, colormap=colormap, value_bounds=plot_bounds)

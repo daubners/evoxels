@@ -85,6 +85,10 @@ class VoxelGrid:
         """Remove ``dim`` from ``field``."""
         raise NotImplementedError
 
+    def concatenate(self, fieldlist, dim):
+        """Concatenate fields in ``fieldlist``."""
+        raise NotImplementedError
+
     def set(self, field, index, value):
         """Set ``field[index]`` to ``value`` and return ``field``."""
         raise NotImplementedError
@@ -363,6 +367,9 @@ class VoxelGridTorch(VoxelGrid):
     def squeeze(self, field, dim):
         return self.torch.squeeze(field, dim)
 
+    def concatenate(self, fieldlist, dim):
+        return self.torch.cat(fieldlist, dim=dim)
+
     def set(self, field, index, value):
         field[index] = value
         return field
@@ -415,6 +422,9 @@ class VoxelGridJax(VoxelGrid):
 
     def squeeze(self, field, dim):
         return self.jnp.squeeze(field, axis=dim)
+
+    def concatenate(self, fieldlist, dim):
+        return self.jnp.concatenate(fieldlist, axis=dim)
 
     def set(self, field, index, value):
         return field.at[index].set(value)
