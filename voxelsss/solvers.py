@@ -42,7 +42,8 @@ class TimeDependendSolver:
         jit=True,
         verbose=True,
         vtk_out=False,
-        plot_bounds=None
+        plot_bounds=None,
+        colormap='viridis'
         ):
         """Run the time integration loop.
 
@@ -93,19 +94,19 @@ class TimeDependendSolver:
         for i in range(max_iters):
             time = i * time_increment
             if i % n_out == 0:
-                self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds)
+                self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
                 frame += 1
 
             u = step_fn(u, time)
 
         end = timer()
         time = max_iters * time_increment
-        self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds)
+        self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
 
         if verbose:
             self.profiler.print_memory_stats(start, end, max_iters)
 
-    def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds):
+    def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
             u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
@@ -128,4 +129,4 @@ class TimeDependendSolver:
             self.vf.export_to_vtk(filename=filename, field_names=self.fieldnames)
         if verbose == 'plot':
             clear_output(wait=True)
-            self.vf.plot_slice(self.fieldnames[0], slice_idx, time=time, value_bounds=plot_bounds)
+            self.vf.plot_slice(self.fieldnames[0], slice_idx, time=time, colormap=colormap, value_bounds=plot_bounds)

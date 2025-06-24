@@ -145,6 +145,19 @@ class VoxelFields:
         else:
             self.fields[name] = np.zeros(self.shape)
 
+    def set_voxel_sphere(self, name: str, center, radius, label: int | float = 1):
+        """Create a voxelized representation of a sphere in 3D
+        
+        Fill voxels within given ``radius`` around the given ``center``
+        with value provided by ``label``.
+        """
+        x, y, z = np.ogrid[:self.Nx, :self.Ny, :self.Nz]
+        distance_squared = (x * self.spacing[0] + self.origin[0] - center[0])**2 +\
+                           (y * self.spacing[1] + self.origin[1] - center[1])**2 +\
+                           (z * self.spacing[2] + self.origin[2] - center[2])**2
+        mask = distance_squared <= radius**2
+        self.fields[name][mask] = label
+
     def calc_field_average(self, name: str):
         """Return the average value of a stored field."""
         if self.convention == 'cell_center':
