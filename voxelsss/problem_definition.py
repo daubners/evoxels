@@ -54,28 +54,36 @@ class ODE(ABC):
         pass
 
 
-class SpectralODE(ODE):
+class SemiLinearODE(ODE):
     @property
     @abstractmethod
-    def spectral_factor(self):
-        """Spectral factor required for spectral ODE solvers."""
+    def fourier_symbol(self):
+        """Symbol of the highest order spatial operator
+        
+        The symbol of an operator is its representation in the
+        Fourier (spectral) domain. For instance the:
+        - Laplacian operator $\nabla^2$ has a symbol $-k^2$,
+        - diffusion operator $D\nabla^2$ corresponds to $-k^2D$
+        
+        The symbol is required for pseudo-spectral timesteppers.
+        """
         pass
 
 
 @dataclass
-class PoissonEquation(SpectralODE):
+class PoissonEquation(SemiLinearODE):
     vg: VoxelGrid
     D: float
     BC_type: str
     bcs: tuple = (0,0)
     f: Callable | None = None
     A: float = 0.25
-    _spectral_factor: Any = field(init=False, repr=False)
+    _fourier_symbol: Any = field(init=False, repr=False)
 
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         k_squared = self.vg.rfft_k_squared()
-        self._spectral_factor = self.D * self.A * k_squared**2
+        self._fourier_symbol = -self.D * self.A * k_squared
         if self.f is None:
             self.f = lambda c=None, t=None, lib=None: 0
 
@@ -93,8 +101,8 @@ class PoissonEquation(SpectralODE):
         return 2
 
     @property
-    def spectral_factor(self):
-        return self._spectral_factor
+    def fourier_symbol(self):
+        return self._fourier_symbol
     
     def _eval_f(self, c, t, lib):
         """Evaluate source/forcing term using ``self.f``."""
@@ -116,18 +124,18 @@ class PoissonEquation(SpectralODE):
 
 
 @dataclass
-class PeriodicCahnHilliard(SpectralODE):
+class PeriodicCahnHilliard(SemiLinearODE):
     vg: VoxelGrid
     eps: float
     D: float = 1.0
     mu_hom: Callable | None = None
     A: float = 0.25
-    _spectral_factor: Any = field(init=False, repr=False)
+    _fourier_symbol: Any = field(init=False, repr=False)
     
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         k_squared = self.vg.rfft_k_squared()
-        self._spectral_factor = 2 * self.eps * self.D * self.A * k_squared**2
+        self._fourier_symbol = -2 * self.eps * self.D * self.A * k_squared**2
         if self.mu_hom is None:
             self.mu_hom = lambda c, lib=None: 18 / self.eps * c * (1 - c) * (1 - 2 * c)
     
@@ -136,8 +144,8 @@ class PeriodicCahnHilliard(SpectralODE):
         return 2
 
     @property
-    def spectral_factor(self):
-        return self._spectral_factor
+    def fourier_symbol(self):
+        return self._fourier_symbol
     
     def pad_boundary_conditions(self, u):
         return self.vg.pad_periodic_BC(u)
@@ -222,19 +230,19 @@ class PeriodicCahnHilliard(SpectralODE):
 
 
 @dataclass
-class AllenCahnEquation(SpectralODE):
+class AllenCahnEquation(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 2.0
     gab: float = 1.0
     M: float = 1.0
     curvature: float = 0.01
     potential: Callable | None = None
-    _spectral_factor: Any = field(init=False, repr=False)
+    _fourier_symbol: Any = field(init=False, repr=False)
     
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         k_squared = self.vg.rfft_k_squared()
-        self._spectral_factor = 2 * self.M * self.gab* k_squared
+        self._fourier_symbol = -2 * self.M * self.gab* k_squared
         if self.potential is None:
             self.potential = lambda u, lib=None: 18 / self.eps * u * (1-u) * (1-2*u)
     
@@ -243,8 +251,8 @@ class AllenCahnEquation(SpectralODE):
         return 2
 
     @property
-    def spectral_factor(self):
-        return self._spectral_factor
+    def fourier_symbol(self):
+        return self._fourier_symbol
 
     def pad_boundary_conditions(self, u):
         return self.vg.pad_zero_flux_BC(u)
