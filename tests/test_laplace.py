@@ -2,8 +2,12 @@
 
 import sympy as sp
 import sympy.vector as spv
+import importlib.util
+import pytest
 from voxelsss.problem_definition import PoissonEquation
 from voxelsss.utils import rhs_convergence_test
+
+jax_available = importlib.util.find_spec("jax") is not None
 
 CS = spv.CoordSys3D('CS')
 def forcing(u,t):
@@ -26,6 +30,7 @@ def test_periodic_laplace_torch():
     )
     assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
 
+@pytest.mark.skipif(not jax_available, reason="jax not installed")
 def test_periodic_laplace_jax():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = PoissonEquation,
