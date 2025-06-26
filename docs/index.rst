@@ -9,6 +9,7 @@ Welcome to the voxelsss documentation!
    notebooks/00-using-voxelfields.ipynb
    notebooks/01-using-solvers.ipynb
    notebooks/03-ODE-prototyping.ipynb
+   notebooks/10-appendix-convergence-testing.ipynb
    api
    contributing
    authors
