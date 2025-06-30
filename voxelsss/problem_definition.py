@@ -118,7 +118,7 @@ class PoissonEquation(SpectralODE):
 @dataclass
 class PeriodicCahnHilliard(SpectralODE):
     vg: VoxelGrid
-    eps: float
+    eps: float = 3.0
     D: float = 1.0
     mu_hom: Callable | None = None
     A: float = 0.25
