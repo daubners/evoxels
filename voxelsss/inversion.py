@@ -29,6 +29,7 @@ class InversionModel:
     """
     vf: Any  # VoxelFields object
     problem_cls: Type
+    pos_params: Optional[list[str]] = None
     problem_kwargs: Optional[dict[str, Any]] = None
     backend: str = 'jax'
 
@@ -46,7 +47,7 @@ class InversionModel:
                     "CahnHilliardInversionModel requires the optional JAX"
                     " dependencies (jax, diffrax)."
                 )
-
+            
     def solve(self, parameters, y0, saveat, adjoint=dfx.ForwardMode(), dt0=0.1):
         """Integrate the Cahn--Hilliard equation for a given parameter set.
 
@@ -65,6 +66,8 @@ class InversionModel:
         """
         u = self.vg.init_scalar_field(y0)
         u = self.vg.trim_boundary_nodes(u)
+        if self.pos_params:
+            parameters = {k: jnp.exp(v) if k in self.pos_params else v for k, v in parameters.items()}
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
         solver = pseudo_spectral_IMEX_dfx(problem.spectral_factor)
 
@@ -194,6 +197,13 @@ class InversionModel:
         args = (y0s, values, saveat)
         residuals_ = partial(self.residuals, adjoint=adjoint)
 
+        if self.pos_params:
+            # Ensure parameters are positive and take log
+            for key in self.pos_params:
+                if initial_parameters[key] <= 0:
+                    raise ValueError(f"Parameter {key} must be positive")
+                initial_parameters[key] = jnp.log(initial_parameters[key])
+
         solver = optx.LevenbergMarquardt(
             rtol=rtol,
             atol=atol,
@@ -212,3 +222,4 @@ class InversionModel:
         )
 
         return sol
+        # TODO: postprocess parameters by taking exp of positive parameters
