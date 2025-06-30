@@ -1,61 +1,73 @@
 from functools import partial
+from dataclasses import dataclass
+from timeit import default_timer as timer
+from typing import Any, Type, Optional
+from voxelsss.timesteppers import pseudo_spectral_IMEX_dfx
 
 try:
     import diffrax as dfx
-    import equinox as eqx
     import optimistix as optx
     import jax.numpy as jnp
     import jax
 except ImportError:
     dfx = None
-    eqx = None
     optx = None
     jnp = None
     jax = None
 
-from .voxelfields import VoxelFields
-from .timesteppers import SemiImplicitFourierSpectral
-from .problem_definition import PeriodicCahnHilliard
-from .voxelgrid import VoxelGridJax
+DIFFRAX_AVAILABLE = dfx is not None
 
-JAX_AVAILABLE = jax is not None
+@dataclass
+class InversionModel:
+    """Inverse modeling using JAX and diffrax.
 
+    This small helper class wraps the differentiable solver implementation and
+    provides utilities to fit material parameters via gradient based
+    optimization.  It is intentionally lightweight so that new users can easily
+    follow the individual steps: solving the PDE, computing residuals and
+    running a least squares optimiser.
+    """
+    vf: Any  # VoxelFields object
+    problem_cls: Type
+    problem_kwargs: Optional[dict[str, Any]] = None
+    backend: str = 'jax'
 
-class CahnHilliardInversionModel:
-    def __init__(
-        self,
-        Nx=128,
-        Ny=128,
-        Nz=128,
-        Lx=0.01,
-        Ly=0.01,
-        Lz=0.01,
-        eps=3.0,
-        A=0.25,
-    ):
-        if not JAX_AVAILABLE:
-            raise ImportError(
-                "CahnHilliardInversionModel requires the optional JAX"
-                " dependencies (jax, diffrax, equinox, optimistix)."
-            )
-        self.Nx, self.Ny, self.Nz = Nx, Ny, Nz
-        self.Lx, self.Ly, self.Lz = Lx, Ly, Lz
-        self.eps, self.A = eps, A
+    def __post_init__(self):
+        """Initialize backend specific components."""
+        self.problem_kwargs = self.problem_kwargs or {}
+        if self.backend == 'jax':
+            from voxelsss.voxelgrid import VoxelGridJax
+            from .profiler import JAXMemoryProfiler
+            self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
+            self.profiler = JAXMemoryProfiler()
+
+            if not DIFFRAX_AVAILABLE:
+                raise ImportError(
+                    "CahnHilliardInversionModel requires the optional JAX"
+                    " dependencies (jax, diffrax)."
+                )
 
     def solve(self, parameters, y0, saveat, adjoint=dfx.ForwardMode(), dt0=0.1):
-        vf = VoxelFields(
-            (self.Nx, self.Ny, self.Nz),
-            domain_size=(self.Lx, self.Ly, self.Lz)
-        )
-        vg = VoxelGridJax(vf.grid_info())
-        u = vg.init_scalar_field(jnp.array(y0))
-        problem = PeriodicCahnHilliard(vg, self.eps, parameters["D"], mu_hom=None, A=self.A)
+        """Integrate the Cahn--Hilliard equation for a given parameter set.
 
-        solver = SemiImplicitFourierSpectral(
-            spectral_factor=problem.spectral_factor,
-            rfftn=vg.rfftn,
-            irfftn=vg.irfftn,
-        )
+        Args:
+            parameters (dict): Dictionary containing the material parameters to
+                solve with.  Only the ``"D"`` key (mobility) is currently
+                supported.
+            y0 (array-like): Initial concentration field.
+            saveat (:class:`diffrax.SaveAt`): Time points at which the solution
+                should be stored.
+            adjoint: Differentiation mode used by :func:`diffrax.diffeqsolve`.
+            dt0 (float): Initial step size for the time integrator.
+
+        Returns:
+            jax.Array: Array of saved concentration fields with shape
+            ``(len(saveat.ts), Nx, Ny, Nz)``.
+        """
+        u = self.vg.init_scalar_field(y0)
+        u = self.vg.trim_boundary_nodes(u)
+        problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
+        solver = pseudo_spectral_IMEX_dfx(problem.spectral_factor)
 
         solution = dfx.diffeqsolve(
             dfx.ODETerm(lambda t, y, args: problem.rhs(y, t)),
@@ -69,9 +81,37 @@ class CahnHilliardInversionModel:
             throw=False,
             adjoint=adjoint,
         )
-        return solution.ys[:, 0]
+        padded = problem.pad_boundary_conditions(solution.ys[:, 0])
+        out = self.vg.trim_ghost_nodes(padded)
+        return out
+    
+    def forward_solve(self, parameters, fieldname, saveat, dt0=0.1, verbose=True):
+        start = timer()
+        u0 = self.vf.fields[fieldname]
+        sol = self.solve(parameters, u0, saveat, dt0=dt0)
+        end = timer()
 
+        self.vf.fields[fieldname] = self.vg.to_numpy(sol[-1])
+        if verbose:
+            iterations = int(saveat.subs.ts[-1] // dt0)
+            self.profiler.print_memory_stats(start, end, iterations)
+
+        return sol
+    
     def residuals(self, parameters, y0s__values__saveat, adjoint=dfx.ForwardMode()):
+        """Calculate residuals between measured and simulated states.
+
+        Args:
+            parameters (dict): Current estimate of the model parameters.
+            y0s__values__saveat (tuple): Tuple ``(y0s, values, saveat)`` where
+                ``y0s`` contains the initial states for each sequence, ``values``
+                contains the observed states and ``saveat`` specifies the time
+                points of these observations.
+            adjoint: Differentiation mode for :func:`solve`.
+
+        Returns:
+            jax.Array: Array of residuals with shape matching ``values``.
+        """
         y0s, values, saveat = y0s__values__saveat
         solve_ = partial(self.solve, adjoint=adjoint)
         batch_solve = jax.vmap(solve_, in_axes=(None, 0, None))
@@ -90,6 +130,28 @@ class CahnHilliardInversionModel:
         verbose=True,
         max_steps=1000,
     ):
+        """Fit ``parameters`` so that the model matches observed data.
+
+        This method assembles the observed sequences into a format suitable for
+        :func:`optimistix.least_squares` and then runs a Levenberg--Marquardt
+        optimisation to minimise the residuals returned by :func:`residuals`.
+
+        Args:
+            initial_parameters (dict): Initial guess for the parameters to be
+                optimised.
+            data (dict): Dictionary containing ``"ts"`` (time stamps) and
+                ``"ys"`` (concentration fields) as produced by :func:`solve`.
+            inds (list[list[int]]): For each sequence, the indices in ``data``
+                that should be used for training. All sequences must have the
+                same spacing.
+            adjoint: Differentiation mode used when evaluating the residuals.
+            rtol, atol (float): Tolerances for the optimiser.
+            verbose (bool): If ``True``, prints optimisation progress.
+            max_steps (int): Maximum number of optimisation steps.
+
+        Returns:
+            optimistix.State: The optimiser state after termination.
+        """
         # Get length of first sequence to use as reference
         ref_len = len(inds[0])
         if ref_len < 2:
