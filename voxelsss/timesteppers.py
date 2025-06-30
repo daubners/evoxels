@@ -52,7 +52,7 @@ try:
             f0 = terms.vf(t0, y0, args)
             euler_y1 = y0 + δt * f0
             dc_fft = jnp.fft.rfftn(f0)
-            dc_fft *= δt / (1.0 + self.spectral_factor * δt)
+            dc_fft *= δt / (1.0 - self.fourier_symbol * δt)
             update = jnp.fft.irfftn(dc_fft, f0.shape)
             y1 = y0 + update
 
