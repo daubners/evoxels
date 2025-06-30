@@ -302,3 +302,66 @@ class AllenCahnEquation(SemiLinearODE):
         n_laplace = (1-self.curvature) * self.vg.calc_normal_laplace(phi_pad)
         df_dphi = 2.0 * (laplace+n_laplace) - potential/self.eps
         return self.M * self.gab * df_dphi
+
+
+@dataclass
+class CoupledReactionDiffusion(SemiLinearODE):
+    vg: VoxelGrid
+    D_A: float = 1.0
+    D_B: float = 0.5
+    feed: float = 0.055
+    kill: float = 0.117
+    interaction: Callable | None = None
+    _fourier_symbol: Any = field(init=False, repr=False)
+    
+    def __post_init__(self):
+        """Precompute factors required by the spectral solver."""
+        k_squared = self.vg.rfft_k_squared()
+        self._fourier_symbol = - max(self.D_A, self.D_B) * k_squared
+        if self.interaction is None:
+            self.interaction = lambda u, lib=None: u[0] * u[1]**2
+    
+    @property
+    def order(self):
+        return 2
+
+    @property
+    def fourier_symbol(self):
+        return self._fourier_symbol
+
+    def pad_boundary_conditions(self, u):
+        return self.vg.pad_periodic_BC(u)
+
+    def _eval_interaction(self, u, lib):
+        """Evaluate interaction term"""
+        try:
+            return self.interaction(u, lib)
+        except TypeError:
+            return self.interaction(u)
+
+    def rhs_analytic(self, u, t):
+        interaction = self._eval_interaction(u, sp)
+        dc_A = self.D_A*spv.laplacian(u[0]) - interaction + self.feed * (1-u[0])
+        dc_B = self.D_B*spv.laplacian(u[1]) + interaction - self.kill * u[1]
+        return (dc_A, dc_B)
+
+    def rhs(self, u, t):
+        r"""Two-component reaction-diffusion system
+        
+        Use batch channels for multiple species:
+        - Species A with concentration c_A = u[0]
+        - Species B with concentration c_B = u[1]
+
+        Args:
+            u (array-like): species
+            t (float): Current time.
+
+        Returns:
+            Backend array of the same shape as ``u`` containing ``du/dt``.
+        """
+        interaction = self._eval_interaction(u, self.vg.lib)
+        u_pad = self.vg.pad_periodic_BC(u)
+        laplace = self.vg.calc_laplace(u_pad)
+        dc_A = self.D_A*laplace[0] - interaction + self.feed * (1-u[0])
+        dc_B = self.D_B*laplace[1] + interaction - self.kill * u[1]
+        return self.vg.lib.stack((dc_A, dc_B), 0)

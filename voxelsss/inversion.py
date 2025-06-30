@@ -67,7 +67,7 @@ class InversionModel:
         u = self.vg.init_scalar_field(y0)
         u = self.vg.trim_boundary_nodes(u)
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
-        solver = pseudo_spectral_IMEX_dfx(problem.spectral_factor)
+        solver = pseudo_spectral_IMEX_dfx(problem.fourier_symbol)
 
         solution = dfx.diffeqsolve(
             dfx.ODETerm(lambda t, y, args: problem.rhs(y, t)),
