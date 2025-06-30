@@ -2,7 +2,8 @@
 
 import sympy as sp
 import sympy.vector as spv
-from voxelsss.problem_definition import PeriodicCahnHilliard, AllenCahnEquation
+from voxelsss.problem_definition import PeriodicCahnHilliard, \
+    AllenCahnEquation, CoupledReactionDiffusion
 from voxelsss.utils import rhs_convergence_test
 
 CS = spv.CoordSys3D('CS')
@@ -33,3 +34,18 @@ def test_Allen_Cahn_rhs():
         dtype          = 'float64'
     )
     assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
+
+
+test_funs = (0.5 + 0.3 * sp.cos(4*sp.pi*CS.x) * sp.cos(4*sp.pi*CS.y)**3,
+             0.4 + 0.1 * sp.sin(2*sp.pi*CS.x) * sp.cos(4*sp.pi*CS.z) )
+
+def test_coupled_reaction_diffusion_rhs():
+    _, _, slopes, order = rhs_convergence_test(
+        ODE_class      = CoupledReactionDiffusion,
+        problem_kwargs = {"D_A": 1.0, "D_B": 0.5},
+        test_function  = test_funs,
+        convention     = 'cell_center',
+        dtype          = 'float64'
+    )
+    assert all(abs(s - order) < 0.1 for s in slopes),\
+        f"expected order {order}, got {slopes[0]:.2f} and {slopes[1]:.2f}"
