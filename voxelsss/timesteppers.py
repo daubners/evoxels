@@ -36,7 +36,7 @@ try:
         
         This is used for the inversion models based on jax and diffrax
         """
-        spectral_factor: float
+        fourier_symbol: float
         term_structure = dfx.ODETerm
         interpolation_cls = dfx.LocalLinearInterpolation
 
