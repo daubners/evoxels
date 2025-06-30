@@ -350,16 +350,16 @@ class VoxelGridTorch(VoxelGrid):
         return self.torch.nn.functional.pad(field, (1,1,1,1,1,1), mode='constant', value=0)
 
     def fftn(self, field):
-        return self.torch.fft.fftn(field)
+        return self.torch.fft.fftn(field, s=self.shape)
 
     def rfftn(self, field):
-        return self.torch.fft.rfftn(field)
+        return self.torch.fft.rfftn(field, s=self.shape)
 
-    def irfftn(self, field, shape):
-        return self.torch.fft.irfftn(field, s=shape)
+    def irfftn(self, field):
+        return self.torch.fft.irfftn(field, s=self.shape)
 
     def real_of_ifftn(self, field):
-        return self.torch.real(self.torch.fft.ifftn(field))
+        return self.torch.real(self.torch.fft.ifftn(field, s=self.shape))
 
     def expand_dim(self, field, dim):
         return field.unsqueeze(dim)
@@ -406,16 +406,16 @@ class VoxelGridJax(VoxelGrid):
         return self.jnp.pad(field, pad_width, mode='constant', constant_values=0)
 
     def fftn(self, field):
-        return self.jnp.fft.fftn(field)
+        return self.jnp.fft.fftn(field, s=self.shape)
 
     def rfftn(self, field):
-        return self.jnp.fft.rfftn(field)
+        return self.jnp.fft.rfftn(field, s=self.shape)
 
-    def irfftn(self, field, shape):
-        return self.jnp.fft.irfftn(field, s=shape)
+    def irfftn(self, field):
+        return self.jnp.fft.irfftn(field, s=self.shape)
 
     def real_of_ifftn(self, field):
-        return self.jnp.fft.ifftn(field).real
+        return self.jnp.fft.ifftn(field, s=self.shape).real
 
     def expand_dim(self, field, dim):
         return self.jnp.expand_dims(field, dim)

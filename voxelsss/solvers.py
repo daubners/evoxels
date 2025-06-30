@@ -5,7 +5,7 @@ from timeit import default_timer as timer
 import sys
 
 @dataclass
-class TimeDependendSolver:
+class TimeDependentSolver:
     """Generic wrapper for solving one or more fields with a time stepper."""
 
     vf: Any  # VoxelFields object

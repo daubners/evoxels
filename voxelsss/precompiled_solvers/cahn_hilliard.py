@@ -1,11 +1,11 @@
 from ..problem_definition import PeriodicCahnHilliard
-from ..solvers import TimeDependendSolver
+from ..solvers import TimeDependentSolver
 from ..timesteppers import pseudo_spectral_IMEX
 from typing import Callable
 
 def run_cahn_hilliard_solver(
     voxelfields,
-    fieldname: str,
+    fieldnames: str | list[str],
     backend: str,
     jit: bool = True,
     device: str = "cuda",
@@ -22,9 +22,9 @@ def run_cahn_hilliard_solver(
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
     """
-    solver = TimeDependendSolver(
+    solver = TimeDependentSolver(
         voxelfields,
-        fieldname,
+        fieldnames,
         backend,
         problem_cls = PeriodicCahnHilliard,
         timestepper_fn = pseudo_spectral_IMEX,

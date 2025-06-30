@@ -1,5 +1,5 @@
 from ..problem_definition import AllenCahnEquation
-from ..solvers import TimeDependendSolver
+from ..solvers import TimeDependentSolver
 from ..timesteppers import forward_euler
 from typing import Callable
 
@@ -24,7 +24,7 @@ def run_allen_cahn_solver(
     """
     Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
     """
-    solver = TimeDependendSolver(
+    solver = TimeDependentSolver(
         voxelfields,
         fieldnames,
         backend,
