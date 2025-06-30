@@ -1,7 +1,7 @@
 from functools import partial
 from dataclasses import dataclass
 from timeit import default_timer as timer
-from typing import Any, Type, Optional
+from typing import Any, Type, Optional, Callable
 from voxelsss.timesteppers import pseudo_spectral_IMEX_dfx
 
 try:
@@ -52,8 +52,7 @@ class InversionModel:
 
         Args:
             parameters (dict): Dictionary containing the material parameters to
-                solve with.  Only the ``"D"`` key (mobility) is currently
-                supported.
+                solve with.
             y0 (array-like): Initial concentration field.
             saveat (:class:`diffrax.SaveAt`): Time points at which the solution
                 should be stored.
