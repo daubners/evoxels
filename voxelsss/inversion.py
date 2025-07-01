@@ -30,7 +30,6 @@ class InversionModel:
     vf: Any  # VoxelFields object
     problem_cls: Type
     pos_params: Optional[list[str]] = None
-    pos_params: Optional[list[str]] = None
     problem_kwargs: Optional[dict[str, Any]] = None
     backend: str = 'jax'
 
