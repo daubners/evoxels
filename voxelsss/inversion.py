@@ -91,6 +91,8 @@ class InversionModel:
     def forward_solve(self, parameters, fieldname, saveat, dt0=0.1, verbose=True):
         start = timer()
         u0 = self.vf.fields[fieldname]
+        if self.pos_params:
+            parameters = {k: jnp.log(v) if k in self.pos_params else v for k, v in parameters.items()}
         sol = self.solve(parameters, u0, saveat, dt0=dt0)
         end = timer()
 
