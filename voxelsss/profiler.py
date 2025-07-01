@@ -1,6 +1,8 @@
 import numpy as np
 import psutil
+import os
 import subprocess
+import tracemalloc
 from abc import ABC, abstractmethod
 
 class MemoryProfiler(ABC):
@@ -18,9 +20,11 @@ class MemoryProfiler(ABC):
             print(f"Error tracking memory with nvidia-smi: {e}")
 
     def update_memory_stats(self):
-        """Update the maximum observed device memory usage."""
+        process = psutil.Process(os.getpid())
+        used_cpu = process.memory_info().rss / 1024**2
+        self.max_used_cpu = np.max((self.max_used_cpu, used_cpu))
         used = self.get_cuda_memory_from_nvidia_smi()
-        self.max_used = np.max((self.max_used, used))
+        self.max_used_gpu = np.max((self.max_used_gpu, used))
 
     @abstractmethod
     def print_memory_stats(self, start: float, end: float, iters: int):
@@ -33,49 +37,58 @@ class TorchMemoryProfiler(MemoryProfiler):
         import torch
         self.torch = torch
         self.device = device
+        tracemalloc.start()
         if device.type == 'cuda':
             torch.cuda.reset_peak_memory_stats(device=device)
-        self.max_used = 0
+        self.max_used_gpu = 0
+        self.max_used_cpu = 0
 
     def print_memory_stats(self, start, end, iters):
         """Print usage statistics for the Torch backend."""
         print(f'Wall time: {np.around(end - start, 4)} s after {iters} iterations '
               f'({np.around((end - start)/iters, 4)} s/iter)')
         
-        if self.device.type == 'cuda':
+        if self.device.type == 'cpu':
+            current, peak = tracemalloc.get_traced_memory()
+            print(f"CPU-RAM (tracemalloc) current: {current / 1024**2:.2f} MB ({peak / 1024**2:.2f} MB max)")
+            tracemalloc.stop()
+
+            process = psutil.Process(os.getpid())
+            current = process.memory_info().rss / 1024**2
+            print(f"CPU-RAM (psutil)      current: {current:.2f} MB ({self.max_used_cpu:.2f} MB max)")
+
+        elif self.device.type == 'cuda':
             self.update_memory_stats()
             used = self.get_cuda_memory_from_nvidia_smi()
-            print(f"GPU-RAM currently allocated: "
-                  f"{self.torch.cuda.memory_allocated(self.device) / 1e6:.2f} MB "
-                  f"({self.torch.cuda.memory_reserved(self.device) / 1e6:.2f} MB reserved)")
-            print(f"GPU-RAM maximally allocated: "
-                  f"{self.torch.cuda.max_memory_allocated(self.device) / 1e6:.2f} MB "
-                  f"({self.torch.cuda.max_memory_reserved(self.device) / 1e6:.2f} MB reserved)")
-            print(f"GPU-RAM nvidia-smi current:  {used} MB ({self.max_used} MB max)")
-        else:
-            memory_info = psutil.virtual_memory()
-            print(f"CPU total memory: {memory_info.total / 1e6:.2f} MB")
-            print(f"CPU available memory: {memory_info.available / 1e6:.2f} MB")
-            print(f"CPU used memory: {memory_info.used / 1e6:.2f} MB")
+            print(f"GPU-RAM (nvidia-smi)  current: {used} MB ({self.max_used_gpu} MB max)")
+            print(f"GPU-RAM (torch)       current: "
+                  f"{self.torch.cuda.memory_allocated(self.device) / 1024**2:.2f} MB "
+                  f"({self.torch.cuda.max_memory_allocated(self.device) / 1024**2:.2f} MB max, "
+                  f"{self.torch.cuda.max_memory_reserved(self.device) / 1024**2:.2f} MB reserved)")
 
 class JAXMemoryProfiler(MemoryProfiler):
     def __init__(self):
         """Initialize the profiler for JAX."""
         import jax
         self.jax = jax
-        self.max_used = 0
+        self.max_used_gpu = 0
+        self.max_used_cpu = 0
+        tracemalloc.start()
 
     def print_memory_stats(self, start, end, iters):
         """Print usage statistics for the JAX backend."""
         print(f'Wall time: {np.around(end - start, 4)} s after {iters} iterations '
               f'({np.around((end - start)/iters, 4)} s/iter)')
 
-        if self.jax.default_backend() == 'cpu':
-            memory_info = psutil.virtual_memory()
-            print(f"CPU total memory: {memory_info.total / 1e6:.2f} MB")
-            print(f"CPU available memory: {memory_info.available / 1e6:.2f} MB")
-            print(f"CPU used memory: {memory_info.used / 1e6:.2f} MB")
-        elif self.jax.default_backend() == 'gpu':
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"CPU-RAM (tracemalloc) current: {current / 1024**2:.2f} MB ({peak / 1024**2:.2f} MB max)")
+        tracemalloc.stop()
+
+        process = psutil.Process(os.getpid())
+        current = process.memory_info().rss / 1024**2
+        print(f"CPU-RAM (psutil)      current: {current:.2f} MB ({self.max_used_cpu:.2f} MB max)")
+
+        if self.jax.default_backend() == 'gpu':
             self.update_memory_stats()
             used = self.get_cuda_memory_from_nvidia_smi()
-            print(f"GPU-RAM nvidia-smi current:  {used} MB ({self.max_used} MB max)")
+            print(f"GPU-RAM (nvidia-smi)  current: {used} MB ({self.max_used_gpu} MB max)")
