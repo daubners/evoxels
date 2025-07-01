@@ -1,7 +1,7 @@
 from functools import partial
 from dataclasses import dataclass
 from timeit import default_timer as timer
-from typing import Any, Type, Optional, Callable
+from typing import Any, Type, Optional
 from voxelsss.timesteppers import pseudo_spectral_IMEX_dfx
 
 try:
