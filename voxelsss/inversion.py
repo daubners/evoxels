@@ -69,7 +69,7 @@ class InversionModel:
         if self.pos_params:
             parameters = {k: jnp.exp(v) if k in self.pos_params else v for k, v in parameters.items()}
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
-        solver = pseudo_spectral_IMEX_dfx(problem.spectral_factor)
+        solver = pseudo_spectral_IMEX_dfx(problem.fourier_symbol)
 
         solution = dfx.diffeqsolve(
             dfx.ODETerm(lambda t, y, args: problem.rhs(y, t)),
@@ -221,5 +221,11 @@ class InversionModel:
             throw=False,
         )
 
-        return sol
-        # TODO: postprocess parameters by taking exp of positive parameters
+        res = sol.value
+
+        if self.pos_params:
+            # Ensure parameters are positive and take exp
+            for key in self.pos_params:
+                res[key] = jnp.exp(res[key])
+
+        return res
