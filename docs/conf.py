@@ -35,9 +35,6 @@ autodoc_mock_imports = [
 ]
 exclude_patterns = ['_build']
 
-# Copy images referenced in the README so they appear on ReadTheDocs.
-html_extra_path = ['evoxels-graphical-abstract.png']
-
 # Automatically document all members using Google style docstrings.
 autodoc_default_options = {
     'members': True,
