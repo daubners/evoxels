@@ -1,7 +1,7 @@
 import numpy as np
 import sympy as sp
 import sympy.vector as spv
-import voxelsss as vox
+import evoxels as vox
 
 ### Generalized test case
 def rhs_convergence_test(

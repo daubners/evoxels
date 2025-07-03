@@ -2,7 +2,7 @@ from functools import partial
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from typing import Any, Type, Optional
-from voxelsss.timesteppers import pseudo_spectral_IMEX_dfx
+from evoxels.timesteppers import pseudo_spectral_IMEX_dfx
 
 try:
     import diffrax as dfx
@@ -37,7 +37,7 @@ class InversionModel:
         """Initialize backend specific components."""
         self.problem_kwargs = self.problem_kwargs or {}
         if self.backend == 'jax':
-            from voxelsss.voxelgrid import VoxelGridJax
+            from evoxels.voxelgrid import VoxelGridJax
             from .profiler import JAXMemoryProfiler
             self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
             self.profiler = JAXMemoryProfiler()

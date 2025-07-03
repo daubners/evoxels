@@ -1,4 +1,4 @@
-"""Public API for the voxelsss package."""
+"""Public API for the evoxels package."""
 
 from .voxelfields import VoxelFields
 from .precompiled_solvers.cahn_hilliard import (run_cahn_hilliard_solver)

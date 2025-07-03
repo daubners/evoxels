@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pytest
-import voxelsss as vox
+import evoxels as vox
 
 def test_voxelFields_init():
     N = 10

@@ -3,9 +3,9 @@
 import importlib.util
 import numpy as np
 import pytest
-import voxelsss as vox
-from voxelsss.inversion import InversionModel
-from voxelsss.problem_definition import PeriodicCahnHilliard
+import evoxels as vox
+from evoxels.inversion import InversionModel
+from evoxels.problem_definition import PeriodicCahnHilliard
 
 diffrax_available = importlib.util.find_spec("diffrax") is not None
 
