@@ -1,12 +1,12 @@
-[![Python package](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml)
+[![Python package](https://github.com/daubners/evoxels/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/evoxels/actions/workflows/python-package.yml)
 
-# voxelsss
+# evoxels
 A differentiable physics framework for voxel-based microstructure simulations
 
-For more detailed information about the code [read the docs](https://voxelsss.readthedocs.io).
+For more detailed information about the code [read the docs](https://evoxels.readthedocs.io).
 
 <p align="center">
-  <img src="voxelsss-graphical.png" width="70%"></img>
+  <img src="docs/evoxels-graphical-abstract.png" width="80%"></img>
 </p>
 
 ```
@@ -39,13 +39,13 @@ TL;DR
 ```bash
 conda create --name voxenv python=3.12
 conda activate voxenv
-pip install voxelsss[torch,jax,dev,notebooks]
+pip install evoxels[torch,jax,dev,notebooks]
 pip install --upgrade "jax[cuda12]"
 ```
 
 The package is available on pypi but can also be installed by cloning the repository
 ```
-git clone git@github.com:daubners/voxelsss.git
+git clone git@github.com:daubners/evoxels.git
 ```
 
 and then locally installing in editable mode.
@@ -57,7 +57,7 @@ activate a virtual environment e.g. using miniconda
 conda create --name myenv python=3.12
 conda activate myenv
 ```
-Navigate to the voxelsss folder, then
+Navigate to the evoxels folder, then
 ```
 pip install -e .[torch] # install with torch backend
 pip install -e .[jax]   # install with jax backend
@@ -73,7 +73,7 @@ pip install -U "jax[cuda12]"
 ```
 To install both backends within one environment it is important to install torch first and then upgrade the `jax` installation e.g.
 ```bash
-pip install voxelsss[torch, jax, dev, notebooks]
+pip install evoxels[torch, jax, dev, notebooks]
 pip install --upgrade "jax[cuda12]"
 ```
 To work with the example notebooks install Jupyter and all notebook related dependencies via
@@ -93,7 +93,7 @@ If you are using VSCode open the Command Palette and select
 Example of creating a voxel field object and running a Cahn-Hilliard simulation based on a semi-implicit FFT approach
 
 ```
-import voxelsss as vox
+import evoxels as vox
 import numpy as np
 
 nx, ny, nz = [100, 100, 100]

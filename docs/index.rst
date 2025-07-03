@@ -1,4 +1,4 @@
-Welcome to the voxelsss documentation!
+Welcome and evoxel!
 ======================================
 
 .. toctree::
