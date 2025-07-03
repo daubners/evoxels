@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
-project = 'voxelsss'
+project = 'evoxels'
 author = 'Simon Daubner'
 
 extensions = [
@@ -36,7 +36,7 @@ autodoc_mock_imports = [
 exclude_patterns = ['_build']
 
 # Copy images referenced in the README so they appear on ReadTheDocs.
-html_extra_path = ['../voxelsss.png', '../voxelsss-graphical.png']
+html_extra_path = ['evoxels-graphical-abstract.png']
 
 # Automatically document all members using Google style docstrings.
 autodoc_default_options = {
@@ -46,7 +46,7 @@ autodoc_default_options = {
     'inherited-members': False,
 }
 # Exclude submodule voxelfields as it already is top-level
-exclude_patterns += ['**/voxelfields.rst', '**/voxelsss.voxelfields.*']
+exclude_patterns += ['**/voxelfields.rst', '**/evoxels.voxelfields.*']
 
 # Napoleon settings
 napoleon_google_docstring = True

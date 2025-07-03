@@ -2,9 +2,9 @@
 
 import sympy as sp
 import sympy.vector as spv
-from voxelsss.problem_definition import PeriodicCahnHilliard, \
+from evoxels.problem_definition import PeriodicCahnHilliard, \
     AllenCahnEquation, CoupledReactionDiffusion
-from voxelsss.utils import rhs_convergence_test
+from evoxels.utils import rhs_convergence_test
 
 CS = spv.CoordSys3D('CS')
 test_fun = 0.4 + 0.1 * sp.sin(2*sp.pi*CS.x)

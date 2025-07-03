@@ -1,1 +1,1 @@
-"""Unit test package for voxelsss."""
+"""Unit test package for evoxels."""

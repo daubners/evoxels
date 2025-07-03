@@ -1,12 +1,12 @@
-[![Python package](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/voxelsss/actions/workflows/python-package.yml)
+[![Python package](https://github.com/daubners/evoxels/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/evoxels/actions/workflows/python-package.yml)
 
-# voxelsss
+# evoxels
 A differentiable physics framework for voxel-based microstructure simulations
 
-For more detailed information about the code [read the docs](https://voxelsss.readthedocs.io).
+For more detailed information about the code [read the docs](https://evoxels.readthedocs.io).
 
 <p align="center">
-  <img src="voxelsss-graphical.png" width="70%"></img>
+  <img src="docs/evoxels-graphical-abstract.png" width="90%"></img>
 </p>
 
 ```
@@ -20,18 +20,18 @@ Rivers flow in blocky streaks.
 So embrace the charm of this edgy place,
 Where every voxel finds its space
 ```
-## Vision
-
-This package provides a unified voxel-based framework that integrates segmented 3D microscopy data, physical simulations, inverse modeling, and machine learning - without any mesh generation. It represents microstructures as dense PyTorch/JAX tensors (e.g. $200^3$ - $1000^3$ voxels) and leverages GPU/CPU-parallel FFT kernels for advanced time stepping schemes applied to phase-field, reaction-diffusion, and transport simulations. By operating entirely within PyTorch’s autodiff graph, it enables end-to-end gradient-based parameter estimation and surrogate training straight from image data. Advanced FFT-based solvers and low-RAM in-place updates scale to hundreds of millions of cells on commodity hardware.
 
 ## Description
+**evoxels are not static — they evolve, adapt, and reveal.**
+Whether you're modeling phase transitions, predicting effective properties, or coupling imaging and simulation — evoxels is the GPU-native, differentiable core that keeps pace with your science.
 
-This package contains a generic ``VoxelFields`` class which is able to handle multiple fields on the same voxel grid.
-Basic attributes are the grid size (Nx, Ny, Nz), the length of physical domain (Lx, Ly, Lz), the resulting grid spacing along each axis (dx, dy, dz) as well as the origin (position of lower left corner) for vtk export.
-The class comes with some comfort features like adding a corresponding meshgrid, plotting slices, interactive plotting of the whole 3D structure and data export to vtk for further visualization.
+Materials science inherently spans disciplines: experimentalists use advanced microscopy to uncover micro- and nanoscale structure, while theorists and computational scientists develop models that link processing, structure, and properties. Bridging these domains is essential for inverse material design where you start from desired performance and work backwards to optimal microstructures and manufacturing routes. Integrating high-resolution imaging with predictive simulations and data‐driven optimization accelerates discovery and deepens understanding of process–structure–property relationships
 
-The solvers are currently under development.
-At this stage, the binary Cahn-Hilliard solver can be used as a reference for computational performance. The precompiled version achieves high computational performance thanks to optimized time-stepping in combination with fast matrix operations on GPU backends.
+From a high-level perspective, evoxels is organized around two core abstractions: ``VoxelFields`` and ``VoxelGrid``. VoxelFields provides a uniform, NumPy-based container for any number of 3D fields on the same regular grid, maximizing interoperability with image I/O libraries (e.g. tifffile, h5py, napari, scikit-image) and visualization tools (PyVista, VTK). VoxelGrid couples these fields to either a PyTorch or JAX backend, offering pre-defined boundary conditions, finite difference stencils and FFT libraries.
+
+The evoxels package enables large-scale forward and inverse simulations on uniform voxel grids, ensuring direct compatibility with microscopy data and harnessing GPU-optimized FFT and tensor operations.
+This design supports forward modeling of transport and phase evolution phenomena, as well as backpropagation-based inverse problems such as parameter estimation and neural surrogate training - tasks which are still difficult to achieve with traditional FEM-based solvers.
+This differentiable‐physics foundation makes it easy to embed voxel‐based solvers as neural‐network layers, train generative models for optimal microstructures, or jointly optimize processing and properties via gradient descent. By keeping each simulation step fast and fully backpropagatable, evoxels enables data‐driven materials discovery and high‐dimensional design‐space exploration.
 
 ## Installation
 
@@ -39,13 +39,13 @@ TL;DR
 ```bash
 conda create --name voxenv python=3.12
 conda activate voxenv
-pip install voxelsss[torch,jax,dev,notebooks]
+pip install evoxels[torch,jax,dev,notebooks]
 pip install --upgrade "jax[cuda12]"
 ```
 
 The package is available on pypi but can also be installed by cloning the repository
 ```
-git clone git@github.com:daubners/voxelsss.git
+git clone git@github.com:daubners/evoxels.git
 ```
 
 and then locally installing in editable mode.
@@ -57,7 +57,7 @@ activate a virtual environment e.g. using miniconda
 conda create --name myenv python=3.12
 conda activate myenv
 ```
-Navigate to the voxelsss folder, then
+Navigate to the evoxels folder, then
 ```
 pip install -e .[torch] # install with torch backend
 pip install -e .[jax]   # install with jax backend
@@ -73,7 +73,7 @@ pip install -U "jax[cuda12]"
 ```
 To install both backends within one environment it is important to install torch first and then upgrade the `jax` installation e.g.
 ```bash
-pip install voxelsss[torch, jax, dev, notebooks]
+pip install evoxels[torch, jax, dev, notebooks]
 pip install --upgrade "jax[cuda12]"
 ```
 To work with the example notebooks install Jupyter and all notebook related dependencies via
@@ -93,7 +93,7 @@ If you are using VSCode open the Command Palette and select
 Example of creating a voxel field object and running a Cahn-Hilliard simulation based on a semi-implicit FFT approach
 
 ```
-import voxelsss as vox
+import evoxels as vox
 import numpy as np
 
 nx, ny, nz = [100, 100, 100]

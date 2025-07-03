@@ -3,8 +3,8 @@
 import importlib.util
 import numpy as np
 import pytest
-import voxelsss as vox
-from voxelsss.solvers import TimeDependentSolver
+import evoxels as vox
+from evoxels.solvers import TimeDependentSolver
 
 jax_available = importlib.util.find_spec("jax") is not None
 

@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "voxelsss"
+name = "evoxels"
 version = "0.1.0"
 description = "Voxel-based structure simulation solvers"
 authors = [
@@ -58,7 +58,7 @@ notebooks = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["voxelsss*"]
+include = ["evoxels*"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

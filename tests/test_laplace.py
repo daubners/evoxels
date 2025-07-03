@@ -4,8 +4,8 @@ import sympy as sp
 import sympy.vector as spv
 import importlib.util
 import pytest
-from voxelsss.problem_definition import PoissonEquation
-from voxelsss.utils import rhs_convergence_test
+from evoxels.problem_definition import PoissonEquation
+from evoxels.utils import rhs_convergence_test
 
 jax_available = importlib.util.find_spec("jax") is not None
 
