@@ -1,7 +1,7 @@
 import numpy as np
 import sympy as sp
 import sympy.vector as spv
-import evoxels as vox
+import evoxels as evo
 
 ### Generalized test case
 def rhs_convergence_test(
@@ -40,15 +40,15 @@ def rhs_convergence_test(
 
     for i, p in enumerate(powers):
         if convention == 'cell_center':
-            vf = vox.VoxelFields((2**p, 2**p, 2**p), (1, 1, 1), convention=convention)
+            vf = evo.VoxelFields((2**p, 2**p, 2**p), (1, 1, 1), convention=convention)
         elif convention == 'staggered_x':
-            vf = vox.VoxelFields((2**p + 1, 2**p, 2**p), (1, 1, 1), convention=convention)
+            vf = evo.VoxelFields((2**p + 1, 2**p, 2**p), (1, 1, 1), convention=convention)
         vf.precision = dtype
         grid = vf.meshgrid()
         if backend == 'torch':
-            vg = vox.voxelgrid.VoxelGridTorch(vf.grid_info(), precision=vf.precision, device='cpu')
+            vg = evo.voxelgrid.VoxelGridTorch(vf.grid_info(), precision=vf.precision, device='cpu')
         elif backend == 'jax':
-            vg = vox.voxelgrid.VoxelGridJax(vf.grid_info(), precision=vf.precision)
+            vg = evo.voxelgrid.VoxelGridJax(vf.grid_info(), precision=vf.precision)
     
         # Initialise fields
         u_list = []
