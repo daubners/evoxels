@@ -235,6 +235,7 @@ class AllenCahnEquation(SemiLinearODE):
     eps: float = 2.0
     gab: float = 1.0
     M: float = 1.0
+    force: float = 0.0
     curvature: float = 0.01
     potential: Callable | None = None
     _fourier_symbol: Any = field(init=False, repr=False)
@@ -273,8 +274,9 @@ class AllenCahnEquation(SemiLinearODE):
         unit_normal = grad / norm_grad
         curv = norm_grad * spv.divergence(unit_normal)
         n_laplace = laplace - (1-self.curvature)*curv
-        df_dphi = 2*n_laplace - self._eval_potential(phi, sp)/self.eps
-        return self.M * self.gab * df_dphi
+        df_dphi = self.gab * (2*n_laplace - self._eval_potential(phi, sp)/self.eps) \
+                  + 3/self.eps * phi * (1-phi) * self.force
+        return self.M * df_dphi
 
     def rhs(self, phi, t):
         r"""Two-phase Allen-Cahn equation
@@ -300,8 +302,9 @@ class AllenCahnEquation(SemiLinearODE):
         phi_pad = self.vg.pad_zero_flux_BC(phi)
         laplace = self.curvature*self.vg.calc_laplace(phi_pad)
         n_laplace = (1-self.curvature) * self.vg.calc_normal_laplace(phi_pad)
-        df_dphi = 2.0 * (laplace+n_laplace) - potential/self.eps
-        return self.M * self.gab * df_dphi
+        df_dphi = self.gab * (2.0 * (laplace+n_laplace) - potential/self.eps)\
+                  + 3/self.eps * phi * (1-phi) * self.force
+        return self.M * df_dphi
 
 
 @dataclass
