@@ -163,41 +163,6 @@ class PeriodicCahnHilliard(SemiLinearODE):
         rhs = spv.divergence(fluxes)
         return rhs
 
-    def calc_divergence_variable_mobility(self, mu, c):
-        """Calculate divergence with variable mobility :math:`M=D*c*(1-c)`.
-
-        Args:
-            mu: Chemical potential field.
-            c: Concentration field.
-
-        Returns:
-            Backend array representing the divergence term.
-        """
-        divergence = ((mu[:, 2:, 1:-1, 1:-1] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 2:, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 2:, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                      (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, :-2, 1:-1, 1:-1]) *\
-                       0.5*(c[:, :-2, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, :-2, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                      * self.vg.div_dx2[0]
-
-        divergence += ((mu[:, 1:-1, 2:, 1:-1] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 1:-1, 2:, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 2:, 1:-1] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                       (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, 1:-1, :-2, 1:-1]) *\
-                       0.5*(c[:, 1:-1, :-2, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, :-2, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                       * self.vg.div_dx2[1]
-
-        divergence += ((mu[:, 1:-1, 1:-1, 2:] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 1:-1, 1:-1, 2:] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 1:-1, 2:] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                       (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, 1:-1, 1:-1, :-2]) *\
-                       0.5*(c[:, 1:-1, 1:-1, :-2] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 1:-1, :-2] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                       * self.vg.div_dx2[2]
-        return divergence
-
     def rhs(self, c, t):
         r"""Evaluate :math:`\partial c / \partial t` for the CH equation.
 
@@ -225,7 +190,22 @@ class PeriodicCahnHilliard(SemiLinearODE):
         laplace = self.vg.laplace(c_BC)
         mu = self._eval_mu(c, self.vg.lib) - 2*self.eps*laplace
         mu = self.vg.bc.pad_periodic(mu)
-        divergence = self.calc_divergence_variable_mobility(mu, c_BC)
+
+        divergence = self.vg.grad_x_face(
+                        self.vg.to_x_face(c_BC) * (1-self.vg.to_x_face(c_BC)) *\
+                        self.vg.grad_x_face(mu)
+                    )[:,:,1:-1,1:-1]
+
+        divergence += self.vg.grad_y_face(
+                        self.vg.to_y_face(c_BC) * (1-self.vg.to_y_face(c_BC)) *\
+                        self.vg.grad_y_face(mu)
+                    )[:,1:-1,:,1:-1]
+
+        divergence += self.vg.grad_z_face(
+                        self.vg.to_z_face(c_BC) * (1-self.vg.to_z_face(c_BC)) *\
+                        self.vg.grad_z_face(mu)
+                    )[:,1:-1,1:-1,:]
+
         return self.D * divergence
 
 
