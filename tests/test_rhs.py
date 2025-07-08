@@ -28,7 +28,7 @@ test_fun2 = 0.5 + 0.3 * sp.cos(4*sp.pi*CS.x)\
 def test_Allen_Cahn_rhs():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = AllenCahnEquation,
-        problem_kwargs = {'eps': 3.0, 'curvature': 0.5},
+        problem_kwargs = {'eps': 3.0, 'curvature': 0.5, 'force': 1},
         test_function  = test_fun2,
         convention     = 'cell_center',
         dtype          = 'float64'

@@ -93,12 +93,12 @@ If you are using VSCode open the Command Palette and select
 Example of creating a voxel field object and running a Cahn-Hilliard simulation based on a semi-implicit FFT approach
 
 ```
-import evoxels as vox
+import evoxels as evo
 import numpy as np
 
 nx, ny, nz = [100, 100, 100]
 
-vf = vox.VoxelFields((nx, ny, nz), (nx,ny,nz))
+vf = evo.VoxelFields((nx, ny, nz), (nx,ny,nz))
 noise = 0.5 + 0.1*np.random.rand(nx, ny, nz)
 vf.add_field("c", noise)
 
@@ -106,7 +106,7 @@ dt = 0.1
 final_time = 100
 steps = int(final_time/dt)
 
-vox.run_cahn_hilliard_solver(
+evo.run_cahn_hilliard_solver(
     vf, 'c', 'torch', jit=True, device='cuda',
     time_increment=dt, frames=10, max_iters=steps,
     verbose='plot', vtk_out=False, plot_bounds=(0,1)
@@ -115,12 +115,12 @@ vox.run_cahn_hilliard_solver(
 As the simulation is running, the "c" field will be overwritten each frame. Therefore, ``vf.fields["c"]`` will give you the last frame of the simulation. This code design has been chosen specifically for large data such that the RAM requirements are rather low.
 For visual inspection of your simulation results, you can plot individual slices (e.g. slice=10) for a given direction (e.g. x)
 ```
-sim.plot_slice("c", 10, direction='x', colormap='viridis')
+vf.plot_slice("c", 10, direction='x', colormap='viridis')
 ```
 or use the following code for interactive plotting with a slider to go through the volume
 ```
 %matplotlib widget
-sim.plot_field_interactive("c", direction='x', colormap='turbo')
+vf.plot_field_interactive("c", direction='x', colormap='turbo')
 ```
 
 ## License

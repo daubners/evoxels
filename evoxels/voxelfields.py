@@ -158,7 +158,7 @@ class VoxelFields:
         mask = distance_squared <= radius**2
         self.fields[name][mask] = label
 
-    def calc_field_average(self, name: str):
+    def average(self, name: str):
         """Return the average value of a stored field."""
         if self.convention == 'cell_center':
             average = np.mean(self.fields[name])

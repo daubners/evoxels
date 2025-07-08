@@ -3,14 +3,14 @@
 import importlib.util
 import numpy as np
 import pytest
-import evoxels as vox
+import evoxels as evo
 from evoxels.solvers import TimeDependentSolver
 
 jax_available = importlib.util.find_spec("jax") is not None
 
 def test_time_solver_multiple_fields():
     """Test calling custom step function and multiple fields"""
-    vf = vox.VoxelFields((4, 4, 4))
+    vf = evo.VoxelFields((4, 4, 4))
     vf.add_field("a", np.ones(vf.shape))
     vf.add_field("b", np.zeros(vf.shape))
 
@@ -32,14 +32,14 @@ def test_1D_analytical_tanh_profile():
     equation and the Cahn-Hilliard equation.
     """
     Nx = 16
-    vf = vox.VoxelFields((Nx, 1, 1), domain_size=(Nx, 1, 1))
+    vf = evo.VoxelFields((Nx, 1, 1), domain_size=(Nx, 1, 1))
     phi = np.zeros((Nx, 1, 1), dtype=np.float32)
     phi[: Nx // 2] = 1.0
     vf.add_field("phi1", phi)
     vf.add_field("phi2", phi)
 
     eps = 3.0
-    vox.run_allen_cahn_solver(
+    evo.run_allen_cahn_solver(
         vf,
         "phi1",
         backend="torch",
@@ -52,7 +52,7 @@ def test_1D_analytical_tanh_profile():
         verbose=False,
     )
 
-    vox.run_cahn_hilliard_solver(
+    evo.run_cahn_hilliard_solver(
         vf,
         "phi2",
         backend="jax",

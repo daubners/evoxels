@@ -88,12 +88,12 @@ class PoissonEquation(SemiLinearODE):
             self.f = lambda c=None, t=None, lib=None: 0
 
         if self.BC_type == 'periodic':
-            bc_fun = self.vg.pad_periodic_BC
+            bc_fun = self.vg.bc.pad_periodic
             self.pad_bcs = lambda field, bc0, bc1: bc_fun(field)
         elif self.BC_type == 'dirichlet':
-            self.pad_bcs = self.vg.pad_dirichlet_periodic_BC
+            self.pad_bcs = self.vg.bc.pad_dirichlet_periodic
         elif self.BC_type == 'neumann':
-            bc_fun = self.vg.pad_zero_flux_periodic_BC
+            bc_fun = self.vg.bc.pad_zero_flux_periodic
             self.pad_bcs = lambda field, bc0, bc1: bc_fun(field)
     
     @property
@@ -118,7 +118,7 @@ class PoissonEquation(SemiLinearODE):
         return self.D*spv.laplacian(u) + self._eval_f(u, t, sp)
     
     def rhs(self, u, t):
-        laplace = self.vg.calc_laplace(self.pad_bcs(u, self.bcs[0], self.bcs[1]))
+        laplace = self.vg.laplace(self.pad_bcs(u, self.bcs[0], self.bcs[1]))
         update = self.D * laplace + self._eval_f(u, t, self.vg.lib)
         return update
 
@@ -148,7 +148,7 @@ class PeriodicCahnHilliard(SemiLinearODE):
         return self._fourier_symbol
     
     def pad_boundary_conditions(self, u):
-        return self.vg.pad_periodic_BC(u)
+        return self.vg.bc.pad_periodic(u)
     
     def _eval_mu(self, c, lib):
         """Evaluate homogeneous chemical potential using ``self.mu``."""
@@ -162,41 +162,6 @@ class PeriodicCahnHilliard(SemiLinearODE):
         fluxes = self.D*c*(1-c)*spv.gradient(mu)
         rhs = spv.divergence(fluxes)
         return rhs
-
-    def calc_divergence_variable_mobility(self, mu, c):
-        """Calculate divergence with variable mobility :math:`M=D*c*(1-c)`.
-
-        Args:
-            mu: Chemical potential field.
-            c: Concentration field.
-
-        Returns:
-            Backend array representing the divergence term.
-        """
-        divergence = ((mu[:, 2:, 1:-1, 1:-1] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 2:, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 2:, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                      (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, :-2, 1:-1, 1:-1]) *\
-                       0.5*(c[:, :-2, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, :-2, 1:-1, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                      * self.vg.div_dx2[0]
-
-        divergence += ((mu[:, 1:-1, 2:, 1:-1] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 1:-1, 2:, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 2:, 1:-1] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                       (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, 1:-1, :-2, 1:-1]) *\
-                       0.5*(c[:, 1:-1, :-2, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, :-2, 1:-1] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                       * self.vg.div_dx2[1]
-
-        divergence += ((mu[:, 1:-1, 1:-1, 2:] - mu[:, 1:-1, 1:-1, 1:-1]) *\
-                       0.5*(c[:, 1:-1, 1:-1, 2:] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 1:-1, 2:] + c[:, 1:-1, 1:-1, 1:-1])) - \
-                       (mu[:, 1:-1, 1:-1, 1:-1] - mu[:, 1:-1, 1:-1, :-2]) *\
-                       0.5*(c[:, 1:-1, 1:-1, :-2] + c[:, 1:-1, 1:-1, 1:-1]) * \
-                       (1 - 0.5*(c[:, 1:-1, 1:-1, :-2] + c[:, 1:-1, 1:-1, 1:-1]))) \
-                       * self.vg.div_dx2[2]
-        return divergence
 
     def rhs(self, c, t):
         r"""Evaluate :math:`\partial c / \partial t` for the CH equation.
@@ -221,11 +186,26 @@ class PeriodicCahnHilliard(SemiLinearODE):
             Backend array of the same shape as ``c`` containing ``dc/dt``.
         """
         c = self.vg.lib.clip(c, 0, 1)
-        c_BC = self.vg.pad_periodic_BC(c)
-        laplace = self.vg.calc_laplace(c_BC)
+        c_BC = self.vg.bc.pad_periodic(c)
+        laplace = self.vg.laplace(c_BC)
         mu = self._eval_mu(c, self.vg.lib) - 2*self.eps*laplace
-        mu = self.vg.pad_periodic_BC(mu)
-        divergence = self.calc_divergence_variable_mobility(mu, c_BC)
+        mu = self.vg.bc.pad_periodic(mu)
+
+        divergence = self.vg.grad_x_face(
+                        self.vg.to_x_face(c_BC) * (1-self.vg.to_x_face(c_BC)) *\
+                        self.vg.grad_x_face(mu)
+                    )[:,:,1:-1,1:-1]
+
+        divergence += self.vg.grad_y_face(
+                        self.vg.to_y_face(c_BC) * (1-self.vg.to_y_face(c_BC)) *\
+                        self.vg.grad_y_face(mu)
+                    )[:,1:-1,:,1:-1]
+
+        divergence += self.vg.grad_z_face(
+                        self.vg.to_z_face(c_BC) * (1-self.vg.to_z_face(c_BC)) *\
+                        self.vg.grad_z_face(mu)
+                    )[:,1:-1,1:-1,:]
+
         return self.D * divergence
 
 
@@ -235,6 +215,7 @@ class AllenCahnEquation(SemiLinearODE):
     eps: float = 2.0
     gab: float = 1.0
     M: float = 1.0
+    force: float = 0.0
     curvature: float = 0.01
     potential: Callable | None = None
     _fourier_symbol: Any = field(init=False, repr=False)
@@ -255,7 +236,7 @@ class AllenCahnEquation(SemiLinearODE):
         return self._fourier_symbol
 
     def pad_boundary_conditions(self, u):
-        return self.vg.pad_zero_flux_BC(u)
+        return self.vg.bc.pad_zero_flux(u)
 
     def _eval_potential(self, phi, lib):
         """Evaluate phasefield potential"""
@@ -273,8 +254,9 @@ class AllenCahnEquation(SemiLinearODE):
         unit_normal = grad / norm_grad
         curv = norm_grad * spv.divergence(unit_normal)
         n_laplace = laplace - (1-self.curvature)*curv
-        df_dphi = 2*n_laplace - self._eval_potential(phi, sp)/self.eps
-        return self.M * self.gab * df_dphi
+        df_dphi = self.gab * (2*n_laplace - self._eval_potential(phi, sp)/self.eps) \
+                  + 3/self.eps * phi * (1-phi) * self.force
+        return self.M * df_dphi
 
     def rhs(self, phi, t):
         r"""Two-phase Allen-Cahn equation
@@ -297,11 +279,12 @@ class AllenCahnEquation(SemiLinearODE):
         """
         phi = self.vg.lib.clip(phi, 0, 1)
         potential = self._eval_potential(phi, self.vg.lib)
-        phi_pad = self.vg.pad_zero_flux_BC(phi)
-        laplace = self.curvature*self.vg.calc_laplace(phi_pad)
-        n_laplace = (1-self.curvature) * self.vg.calc_normal_laplace(phi_pad)
-        df_dphi = 2.0 * (laplace+n_laplace) - potential/self.eps
-        return self.M * self.gab * df_dphi
+        phi_pad = self.vg.bc.pad_zero_flux(phi)
+        laplace = self.curvature*self.vg.laplace(phi_pad)
+        n_laplace = (1-self.curvature) * self.vg.normal_laplace(phi_pad)
+        df_dphi = self.gab * (2.0 * (laplace+n_laplace) - potential/self.eps)\
+                  + 3/self.eps * phi * (1-phi) * self.force
+        return self.M * df_dphi
 
 
 @dataclass
@@ -330,7 +313,7 @@ class CoupledReactionDiffusion(SemiLinearODE):
         return self._fourier_symbol
 
     def pad_boundary_conditions(self, u):
-        return self.vg.pad_periodic_BC(u)
+        return self.vg.bc.pad_periodic(u)
 
     def _eval_interaction(self, u, lib):
         """Evaluate interaction term"""
@@ -360,8 +343,8 @@ class CoupledReactionDiffusion(SemiLinearODE):
             Backend array of the same shape as ``u`` containing ``du/dt``.
         """
         interaction = self._eval_interaction(u, self.vg.lib)
-        u_pad = self.vg.pad_periodic_BC(u)
-        laplace = self.vg.calc_laplace(u_pad)
+        u_pad = self.vg.bc.pad_periodic(u)
+        laplace = self.vg.laplace(u_pad)
         dc_A = self.D_A*laplace[0] - interaction + self.feed * (1-u[0])
         dc_B = self.D_B*laplace[1] + interaction - self.kill * u[1]
         return self.vg.lib.stack((dc_A, dc_B), 0)

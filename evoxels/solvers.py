@@ -67,7 +67,7 @@ class TimeDependentSolver:
 
         u_list = [self.vg.init_scalar_field(self.vf.fields[name]) for name in self.fieldnames]
         u = self.vg.concatenate(u_list, 0)
-        u = self.vg.trim_boundary_nodes(u)
+        u = self.vg.bc.trim_boundary_nodes(u)
 
         if self.step_fn is not None:
             step_fn = self.step_fn
@@ -109,7 +109,7 @@ class TimeDependentSolver:
     def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
-            u_out = self.vg.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
+            u_out = self.vg.bc.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
         else:
             u_out = u
 
