@@ -2,18 +2,9 @@ import numpy as np
 import warnings
 from dataclasses import dataclass
 from typing import Tuple, Any
+from .fd_stencils import FDStencils
+from .boundary_conditions import CellCenteredBCs, StaggeredXBCs
 
-# Shorthands in slicing logic
-__ = slice(None)    # all elements [:]
-_i_ = slice(1, -1)  # inner elements [1:-1]
-
-CENTER = (__,  _i_, _i_, _i_)
-LEFT   = (__, slice(None,-2), _i_, _i_)
-RIGHT  = (__, slice(2, None), _i_, _i_)
-BOTTOM = (__, _i_, slice(None,-2), _i_)
-TOP    = (__, _i_, slice(2, None), _i_)
-BACK   = (__, _i_, _i_, slice(None,-2))
-FRONT  = (__, _i_, _i_, slice(2, None))
 
 @dataclass
 class Grid:
@@ -25,7 +16,7 @@ class Grid:
 
 
 @dataclass
-class VoxelGrid:
+class VoxelGrid(FDStencils):
     """Abstract backend adapter: handles array conversion and padding."""
     def __init__(self, grid: Grid, lib):
         self.shape   = grid.shape
@@ -39,19 +30,11 @@ class VoxelGrid:
         self.div_dx2 = 1/self.to_backend(np.array(self.spacing))**2
 
         # Boundary conditions
-        if self.convention == 'staggered_x':
-            self.trim_boundary_nodes       = self.trim_boundary_nodes_staggered_x
-            self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_staggered_x
-            self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_staggered_x
-            self.pad_periodic_BC           = self.pad_periodic_BC_staggered_x
-            self.pad_zero_flux_BC          = self.pad_zero_flux_BC_staggered_x
-        else:
-            self.trim_boundary_nodes       = self.trim_boundary_nodes_cell_center
-            self.pad_dirichlet_periodic_BC = self.pad_dirichlet_periodic_BC_cell_center
-            self.pad_zero_flux_periodic_BC = self.pad_zero_flux_periodic_BC_cell_center
-            self.pad_periodic_BC           = self.pad_periodic_BC_cell_center
-            self.pad_zero_flux_BC          = self.pad_zero_flux_BC_cell_center
-    
+        if self.convention == 'cell_center':
+            self.bc = CellCenteredBCs(self)
+        elif self.convention == 'staggered_x':
+            self.bc = StaggeredXBCs(self)
+
     # Operate on fields
     def to_backend(self, field):
         """Convert a NumPy array to the backend representation."""
@@ -135,37 +118,13 @@ class VoxelGrid:
         field = self.to_backend(array)
         field = self.expand_dim(field, 0)
         return field
-    
-    def trim_boundary_nodes_cell_center(self, field):
-        return field
-    
-    def trim_boundary_nodes_staggered_x(self, field):
-        """Trim boundary nodes of ``field`` for staggered grids."""
-        if field.shape[1] == self.shape[0]:
-            return field[:,1:-1,:,:]
-        else:
-            raise ValueError(
-                f"The provided field must have the shape {self.shape}."
-            )
-    
-    def trim_ghost_nodes(self, field):
-        if (self.convention == 'cell_center') and \
-           (field[0,1:-1,1:-1,1:-1].shape == self.shape):
-            return field[:,1:-1,1:-1,1:-1]
-        elif (self.convention == 'staggered_x') and \
-             (field[0,:,1:-1,1:-1].shape == self.shape):
-            return field[:,:,1:-1,1:-1]
-        else:
-            raise ValueError(
-                f"The provided field has the wrong shape {self.shape}."
-            )
 
     def export_scalar_field_to_numpy(self, field):
         """Export backend field back to NumPy."""
         array = self.to_numpy(self.squeeze(field, 0))
         return array
     
-    def calc_field_average(self, field):
+    def average(self, field):
         """Return the spatial average of ``field``."""
         if field.shape[1:] == self.shape:
             if self.convention == 'cell_center':
@@ -182,127 +141,6 @@ class VoxelGrid:
             )
         return average
 
-    def pad_periodic_BC_cell_center(self, field):
-        """
-        Periodic boundary conditions in all directions.
-        Consistent with cell centered grid.
-        """
-        return self.pad_periodic(field)
-    
-    def pad_periodic_BC_staggered_x(self, field):
-        raise NotImplementedError
-    
-    def pad_dirichlet_periodic_BC_cell_center(self, field, bc0=0, bc1=0):
-        """
-        Homogenous Dirichlet boundary conditions in x-drection,
-        periodic in y- and z-direction. Consistent with cell centered grid,
-        but loss of 2nd order convergence.
-        """
-        padded = self.pad_periodic(field)
-        padded = self.set(padded, (__, 0,__,__), 2.0*bc0 - padded[:, 1,:,:])
-        padded = self.set(padded, (__,-1,__,__), 2.0*bc1 - padded[:,-2,:,:])
-        return padded
-    
-    def pad_dirichlet_periodic_BC_staggered_x(self, field, bc0=0, bc1=0):
-        """
-        Homogenous Dirichlet boundary conditions in x-drection,
-        periodic in y- and z-direction. Consistent with staggered_x grid,
-        maintains 2nd order convergence.
-        """
-        padded = self.pad_periodic(field)
-        padded = self.set(padded, (__, 0,__,__), bc0)
-        padded = self.set(padded, (__,-1,__,__), bc1)
-        return padded
-    
-    def pad_zero_flux_periodic_BC_cell_center(self, field):
-        padded = self.pad_periodic(field)
-        padded = self.set(padded, (__, 0,__,__), padded[:, 1,:,:])
-        padded = self.set(padded, (__,-1,__,__), padded[:,-2,:,:])
-        return padded
-    
-    def pad_zero_flux_BC_cell_center(self, field):
-        padded = self.pad_zeros(field)
-        padded = self.set(padded, (__, 0,__,__), padded[:, 1,:,:])
-        padded = self.set(padded, (__,-1,__,__), padded[:,-2,:,:])
-        padded = self.set(padded, (__,__, 0,__), padded[:,:, 1,:])
-        padded = self.set(padded, (__,__,-1,__), padded[:,:,-2,:])
-        padded = self.set(padded, (__,__,__, 0), padded[:,:,:, 1])
-        padded = self.set(padded, (__,__,__,-1), padded[:,:,:,-2])
-        return padded
-
-    def pad_zero_flux_BC_staggered_x(self, field):
-        raise NotImplementedError
-
-    def pad_zero_flux_periodic_BC_staggered_x(self, field):
-        """
-        The following comes out of on interpolation polynomial p with
-        p'(0) = 0, p(dx) = f(dx,...), p(2*dx) = f(2*dx,...)
-        and then use p(0) for the ghost cell. 
-        This should be of sufficient order of f'(0) = 0, and even better if
-        also f'''(0) = 0 (as it holds for cos(k*pi*x)  )
-        """
-        padded = self.pad_periodic(field)
-        fac1 =  4/3
-        fac2 =  1/3
-        padded = self.set(padded, (__, 0,__,__), fac1*padded[:, 1,:,:] - fac2*padded[:, 2,:,:])
-        padded = self.set(padded, (__,-1,__,__), fac1*padded[:,-2,:,:] - fac2*padded[:,-3,:,:])
-        return padded
-    
-    def grad_x(self, field):
-        return 0.5 * (field[RIGHT] - field[LEFT]) * self.div_dx[0]
-
-    def grad_y(self, field):
-        return 0.5 * (field[TOP] - field[BOTTOM]) * self.div_dx[1]
-
-    def grad_z(self, field):
-        return 0.5 * (field[FRONT] - field[BACK]) * self.div_dx[2]
-
-    def calc_gradient_norm_squared(self, field):
-        """Gradient norm squared"""
-        return self.grad_x(field)**2 + self.grad_y(field)**2 + self.grad_z(field)**2
-
-    def calc_laplace(self, field):
-        r"""Calculate laplace based on compact 2nd order stencil.
-
-        Laplace given as $\nabla\cdot(\nabla u)$ which in 3D is given by
-        $\partial^2 u/\partial^2 x + \partial^2 u/\partial^2 y+ \partial^2 u/\partial^2 z$
-        Returned field has same shape as the input field (padded with zeros)
-        """
-        # Manual indexing is ~10x faster than conv3d with laplace kernel in torch
-        laplace = \
-            (field[RIGHT] + field[LEFT]) * self.div_dx2[0] + \
-            (field[TOP] + field[BOTTOM]) * self.div_dx2[1] + \
-            (field[FRONT] + field[BACK]) * self.div_dx2[2] - \
-             2 * field[CENTER] * self.lib.sum(self.div_dx2)
-        return laplace
-    
-    def calc_normal_laplace(self, field):
-        r"""Calculate the normal component of the laplacian
-
-        which is identical to the full laplacian minus curvature.
-        It is defined as $\partial^2_n u = \nabla\cdot(\nabla u\cdot n)\cdot n$
-        where $n$ denotes the surface normal.
-        In the context of phasefield models $n$ is defined as
-        $\frac{\nabla u}{|\nabla u|}$.
-        The calaculation is based on a compact 2nd order stencil.
-        """
-        n_laplace =\
-            self.grad_x(field)**2 * (field[RIGHT] - 2*field[CENTER] + field[LEFT]) * self.div_dx2[0] +\
-            self.grad_y(field)**2 * (field[TOP] - 2*field[CENTER] + field[BOTTOM]) * self.div_dx2[1]+\
-            self.grad_z(field)**2 * (field[FRONT] - 2*field[CENTER] + field[BACK]) * self.div_dx2[2]+\
-            0.5 * self.grad_x(field) * self.grad_y(field) *\
-                  (field[:,2:,2:,1:-1] + field[:,:-2,:-2,1:-1] -\
-                   field[:,:-2,2:,1:-1] - field[:,2:,:-2,1:-1]) * self.div_dx[0] * self.div_dx[1] +\
-            0.5 *self.grad_x(field) * self.grad_z(field) *\
-                  (field[:,2:,1:-1,2:] + field[:,:-2,1:-1,:-2] -\
-                   field[:,:-2,1:-1,2:] - field[:,2:,1:-1,:-2]) * self.div_dx[0] * self.div_dx[2] +\
-            0.5 * self.grad_y(field) * self.grad_z(field) *\
-                  (field[:,1:-1,2:,2:] + field[:,1:-1,:-2,:-2] -\
-                   field[:,1:-1,:-2,2:] - field[:,1:-1,2:,:-2]) * self.div_dx[1] * self.div_dx[2]
-        norm2 = self.calc_gradient_norm_squared(field)
-        bulk = self.lib.where(norm2 <= 1e-7)
-        norm2 = self.set(norm2, bulk, 1.0)
-        return n_laplace/norm2
 
 class VoxelGridTorch(VoxelGrid):
     def __init__(self, grid: Grid, precision='float32', device: str='cuda'):

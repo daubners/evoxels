@@ -58,7 +58,7 @@ def rhs_convergence_test(
             u_list.append(vg.init_scalar_field(init_data))
 
         u = vg.concatenate(u_list, 0)
-        u = vg.trim_boundary_nodes(u)
+        u = vg.bc.trim_boundary_nodes(u)
         ODE = ODE_class(vg, **problem_kwargs)
         rhs_numeric = ODE.rhs(u, 0)
         if n_funcs > 1:

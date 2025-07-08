@@ -65,7 +65,7 @@ class InversionModel:
             ``(len(saveat.ts), Nx, Ny, Nz)``.
         """
         u = self.vg.init_scalar_field(y0)
-        u = self.vg.trim_boundary_nodes(u)
+        u = self.vg.bc.trim_boundary_nodes(u)
         if self.pos_params:
             parameters = {k: jnp.exp(v) if k in self.pos_params else v for k, v in parameters.items()}
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
@@ -84,7 +84,7 @@ class InversionModel:
             adjoint=adjoint,
         )
         padded = problem.pad_boundary_conditions(solution.ys[:, 0])
-        out = self.vg.trim_ghost_nodes(padded)
+        out = self.vg.bc.trim_ghost_nodes(padded)
         return out
     
     def forward_solve(self, parameters, fieldname, saveat, dt0=0.1, verbose=True):

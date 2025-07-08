@@ -62,4 +62,4 @@ def test_sphere_volume_fraction():
     vf.add_field("sphere")
     vf.set_voxel_sphere("sphere", center=(0.5, 0.5, 0.5), radius=0.31, label=1)
     assert np.count_nonzero(vf.fields["sphere"] == 1) == 20
-    assert vf.calc_field_average('sphere') == 0.16
+    assert vf.average('sphere') == 0.16
