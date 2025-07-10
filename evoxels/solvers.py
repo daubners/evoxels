@@ -3,16 +3,17 @@ from dataclasses import dataclass
 from typing import Callable, Any, Type
 from timeit import default_timer as timer
 import sys
+from .problem_definition import ODE
+from .timesteppers import TimeStepper
 
 @dataclass
 class TimeDependentSolver:
     """Generic wrapper for solving one or more fields with a time stepper."""
-
     vf: Any  # VoxelFields object
     fieldnames: str | list[str]
     backend: str
-    problem_cls: Type | None = None
-    timestepper_fn: Callable | None = None
+    problem_cls: Type[ODE] | None = None
+    timestepper_cls: Type[TimeStepper] | None = None
     step_fn: Callable | None = None
     device: str='cuda'
 
@@ -70,21 +71,22 @@ class TimeDependentSolver:
         u = self.vg.bc.trim_boundary_nodes(u)
 
         if self.step_fn is not None:
-            step_fn = self.step_fn
+            step = self.step_fn
             self.problem = None
         else:
-            if self.problem_cls is None or self.timestepper_fn is None:
-                raise ValueError("Either provide step_fn or both problem_cls and timestepper_fn")
+            if self.problem_cls is None or self.timestepper_cls is None:
+                raise ValueError("Either provide step_fn or both problem_cls and timestepper_cls")
             self.problem = self.problem_cls(self.vg, **problem_kwargs)
-            step_fn = self.timestepper_fn(self.problem, time_increment)
+            timestepper = self.timestepper_cls(self.problem, time_increment)
+            step = timestepper.step
 
         # Make use of just-in-time compilation
         if jit and self.backend == 'jax':
             import jax
-            step_fn = jax.jit(step_fn)
+            step = jax.jit(step)
         elif jit and self.backend == 'torch':
             import torch
-            step_fn = torch.compile(step_fn)
+            step = torch.compile(step)
 
         n_out = max_iters // frames
         frame = 0
@@ -97,7 +99,7 @@ class TimeDependentSolver:
                 self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
                 frame += 1
 
-            u = step_fn(u, time)
+            u = step(u, time)
 
         end = timer()
         time = max_iters * time_increment
@@ -109,7 +111,7 @@ class TimeDependentSolver:
     def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
-            u_out = self.vg.bc.trim_ghost_nodes(self.problem.pad_boundary_conditions(u))
+            u_out = self.vg.bc.trim_ghost_nodes(self.problem.pad_bc(u))
         else:
             u_out = u
 

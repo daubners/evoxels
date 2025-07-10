@@ -1,6 +1,6 @@
 from ..problem_definition import PeriodicCahnHilliard
 from ..solvers import TimeDependentSolver
-from ..timesteppers import pseudo_spectral_IMEX
+from ..timesteppers import PseudoSpectralIMEX
 from typing import Callable
 
 def run_cahn_hilliard_solver(
@@ -27,7 +27,7 @@ def run_cahn_hilliard_solver(
         fieldnames,
         backend,
         problem_cls = PeriodicCahnHilliard,
-        timestepper_fn = pseudo_spectral_IMEX,
+        timestepper_cls = PseudoSpectralIMEX,
         device=device,
     )
     solver.solve(

@@ -1,37 +1,80 @@
-from .problem_definition import ODE, SemiLinearODE
-from typing import TypeVar, Callable
 import warnings
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Callable
+from .problem_definition import ODE, SemiLinearODE
 
-State = TypeVar("State")
-TimeStepFn = Callable[[State], State]
+State = Any  # e.g. torch.Tensor or jax.Array
 
-def forward_euler(problem: ODE, time_increment: float) -> TimeStepFn:
-    """First order Euler forward scheme"""
-    def step_fn(u, t):
-        update = time_increment * problem.rhs(u, t)
+class TimeStepper(ABC):
+    """Abstract interface for single‐step timestepping schemes."""
+
+    @property
+    @abstractmethod
+    def order(self) -> int:
+        """Temporal order of accuracy."""
+        pass
+
+    @abstractmethod
+    def step(self, u: State, t: float) -> State:
+        """
+        Take one timestep from t to (t+dt).
+
+        Args:
+            u       : Current state
+            t       : Current time
+        Returns:
+            Updated state at t + dt.
+        """
+        pass
+
+
+@dataclass
+class ForwardEuler(TimeStepper):
+    """First order Euler forward scheme."""
+    problem: ODE
+    dt: float
+
+    @property
+    def order(self) -> int:
+        return 1
+
+    def step(self, u: State, t: float) -> State:
+        return u + self.dt * self.problem.rhs(u, t)
+
+
+@dataclass
+class PseudoSpectralIMEX(TimeStepper):
+    """First‐order IMEX Fourier pseudo‐spectral scheme
+    
+    aka semi-implicit Fourier spectral method; see
+    [Zhu and Chen 1999, doi:10.1103/PhysRevE.60.3564]
+    for more details.
+    """
+    problem: SemiLinearODE
+    dt: float
+
+    def __post_init__(self):
+        # Pre‐bake the linear prefactor in Fourier
+        self._fft_prefac = self.dt / (1 - self.dt*self.problem.fourier_symbol)
+
+    @property
+    def order(self) -> int:
+        return 1
+
+    def step(self, u: State, t: float) -> State:
+        dc = self.problem.rhs(u, t)
+        dc_fft = self.problem.vg.rfftn(dc)
+        dc_fft *= self._fft_prefac
+        update = self.problem.vg.irfftn(dc_fft)
         return u + update
 
-    return step_fn
-
-def pseudo_spectral_IMEX(problem: SemiLinearODE, time_increment: float) -> TimeStepFn:
-    """
-    First‐order IMEX pseudo‐spectral (Fourier) Euler scheme aka
-     -> Semi-implicit Fourier spectral method [Zhu and Chen 1999]
-    """
-    def step_fn(u, t):
-        dc = problem.rhs(u, t)
-        dc_fft = problem.vg.rfftn(dc)
-        dc_fft *= time_increment / (1 - time_increment*problem.fourier_symbol)
-        update = problem.vg.irfftn(dc_fft)
-        return u + update
-
-    return step_fn
 
 try:
     import jax.numpy as jnp
     import diffrax as dfx
 
-    class pseudo_spectral_IMEX_dfx(dfx.AbstractSolver):
+    class PseudoSpectralIMEX_dfx(dfx.AbstractSolver):
         """Re-implementation of pseudo_spectral_IMEX as diffrax class
         
         This is used for the inversion models based on jax and diffrax
@@ -67,5 +110,5 @@ try:
             return terms.vf(t0, y0, args)
         
 except ImportError:
-    pseudo_spectral_IMEX_dfx = None
-    warnings.warn("Diffrax not found. 'pseudo_spectral_IMEX_dfx' will not be available.")
+    PseudoSpectralIMEX_dfx = None
+    warnings.warn("Diffrax not found. 'PseudoSpectralIMEX_dfx' will not be available.")

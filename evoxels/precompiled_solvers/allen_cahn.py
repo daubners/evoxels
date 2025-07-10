@@ -1,6 +1,6 @@
 from ..problem_definition import AllenCahnEquation
 from ..solvers import TimeDependentSolver
-from ..timesteppers import forward_euler
+from ..timesteppers import ForwardEuler
 from typing import Callable
 
 def run_allen_cahn_solver(
@@ -30,7 +30,7 @@ def run_allen_cahn_solver(
         fieldnames,
         backend,
         problem_cls = AllenCahnEquation,
-        timestepper_fn = forward_euler,
+        timestepper_cls = ForwardEuler,
         device=device,
     )
     solver.solve(
