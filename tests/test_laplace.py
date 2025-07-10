@@ -4,7 +4,7 @@ import sympy as sp
 import sympy.vector as spv
 import importlib.util
 import pytest
-from evoxels.problem_definition import PoissonEquation
+from evoxels.problem_definition import ReactionDiffusion
 from evoxels.utils import rhs_convergence_test
 
 jax_available = importlib.util.find_spec("jax") is not None
@@ -20,7 +20,7 @@ test_fun1 = sp.sin(2*sp.pi*CS.x)*sp.sin(4*sp.pi*CS.y)*sp.sin(6*sp.pi*CS.z) \
 
 def test_periodic_laplace_torch():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'periodic'},
         test_function  = test_fun1,
@@ -33,7 +33,7 @@ def test_periodic_laplace_torch():
 @pytest.mark.skipif(not jax_available, reason="jax not installed")
 def test_periodic_laplace_jax():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'periodic'},
         test_function  = test_fun1,
@@ -49,7 +49,7 @@ test_fun2 = (CS.x*(1-CS.x))**2
 
 def test_laplace_zero_dirichlet():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'dirichlet', 'bcs': (0,0)},
         test_function  = test_fun2,
@@ -65,7 +65,7 @@ test_fun3 = sp.cos(sp.pi*CS.x)**3
 
 def test_laplace_nonzero_dirichlet():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'dirichlet', 'bcs': (1,-1)},
         test_function  = test_fun3,
@@ -83,7 +83,7 @@ test_fun = sp.cos(2*sp.pi*CS.x)*sp.sin(4*sp.pi*CS.y)*sp.sin(6*sp.pi*CS.z) \
 
 def test_laplace_zero_flux_cell_center():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'neumann'},
         test_function  = test_fun3,
@@ -95,7 +95,7 @@ def test_laplace_zero_flux_cell_center():
 
 def test_laplace_zero_flux_staggered():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PoissonEquation,
+        ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
                           'BC_type': 'neumann'},
         test_function  = test_fun3,
