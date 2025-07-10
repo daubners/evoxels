@@ -57,16 +57,21 @@ class PseudoSpectralIMEX(TimeStepper):
     def __post_init__(self):
         # Pre‐bake the linear prefactor in Fourier
         self._fft_prefac = self.dt / (1 - self.dt*self.problem.fourier_symbol)
+        if self.problem.bc_type == 'periodic':
+            self.pad = self.problem.vg.bc.pad_fft_periodic
+        elif self.problem.bc_type == 'dirichlet':
+            self.pad = self.problem.vg.bc.pad_fft_dirichlet_periodic
+        elif self.problem.bc_type == 'neumann':
+            self.pad = self.problem.vg.bc.pad_fft_zero_flux_periodic
 
     @property
     def order(self) -> int:
         return 1
 
     def step(self, u: State, t: float) -> State:
-        dc = self.problem.rhs(u, t)
-        dc_fft = self.problem.vg.rfftn(dc)
-        dc_fft *= self._fft_prefac
-        update = self.problem.vg.irfftn(dc_fft)
+        dc = self.pad(self.problem.rhs(u, t))
+        dc_fft = self._fft_prefac * self.problem.vg.rfftn(dc, dc.shape)
+        update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
         return u + update
 
 

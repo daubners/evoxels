@@ -101,14 +101,13 @@ class ReactionDiffusion(SemiLinearODE):
 
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
-        k_squared = self.vg.rfft_k_squared()
-        self._fourier_symbol = -self.D * self.A * k_squared
         if self.f is None:
             self.f = lambda c=None, t=None, lib=None: 0
 
         if self.BC_type == 'periodic':
             bc_fun = self.vg.bc.pad_periodic
             self.pad_boundary = lambda field, bc0, bc1: bc_fun(field)
+            k_squared = self.vg.rfft_k_squared()
         elif self.BC_type == 'dirichlet':
             self.pad_boundary = self.vg.bc.pad_dirichlet_periodic
             if self.vg.convention == 'cell_center':
@@ -116,9 +115,13 @@ class ReactionDiffusion(SemiLinearODE):
                     "Applying Dirichlet BCs on a cell_center grid "
                     "reduces the spatial order of convergence to 0.5!"
                     )
+            k_squared = self.vg.fft_k_squared_nonperiodic()
         elif self.BC_type == 'neumann':
             bc_fun = self.vg.bc.pad_zero_flux_periodic
             self.pad_boundary = lambda field, bc0, bc1: bc_fun(field)
+            k_squared = self.vg.fft_k_squared_nonperiodic()
+
+        self._fourier_symbol = -self.D * self.A * k_squared
     
     @property
     def order(self):
@@ -174,7 +177,7 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
                 self.mask = self.vg.set(self.mask, (__,-1,_i_,_i_), mask_1)
 
             self.norm = self.vg.lib.sqrt(self.vg.gradient_norm_squared(self.mask))
-            self.mask = self.vg.lib.clip(self.mask, 1e-7, 1)
+            self.mask = self.vg.lib.clip(self.mask, 1e-4, 1)
 
             self.bcs = (self.bcs[0] * self.mask[:,0,:,:],
                         self.bcs[1] * self.mask[:,-1,:,:])

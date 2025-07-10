@@ -12,7 +12,7 @@ class CellCenteredBCs:
         Consistent with cell centered grid.
         """
         return self.vg.pad_periodic(field)
-
+    
     def pad_dirichlet_periodic(self, field, bc0=0, bc1=0):
         """
         Homogenous Dirichlet boundary conditions in x-drection,
@@ -39,6 +39,18 @@ class CellCenteredBCs:
         padded = self.vg.set(padded, (__,__,__, 0), padded[:,:,:, 1])
         padded = self.vg.set(padded, (__,__,__,-1), padded[:,:,:,-2])
         return padded
+    
+    def pad_fft_periodic(self, field):
+        """Periodic field needs no fft padding."""
+        return field
+    
+    def pad_fft_dirichlet_periodic(self, field):
+        """Pad with inverse of flipped field in x direction."""
+        return self.vg.concatenate((field, -self.vg.lib.flip(field, [0])), 1)
+    
+    def pad_fft_zero_flux_periodic(self, field):
+        """Pad with flipped field in x direction."""
+        return self.vg.concatenate((field, self.vg.lib.flip(field, [0])), 1)
 
     def trim_boundary_nodes(self, field):
         return field
@@ -90,6 +102,22 @@ class StaggeredXBCs:
         return padded
 
     def pad_zero_flux(self, field):
+        raise NotImplementedError
+    
+    def pad_fft_periodic(self, field):
+        """
+        If field is fully periodic it should be in
+        cell center convention!
+        """
+        raise NotImplementedError
+    
+    def pad_fft_dirichlet_periodic(self, field):
+        """Pad with inverse of flipped field in x direction."""
+        bc = self.vg.lib.zeros_like(field[:,0:1])
+        return self.vg.concatenate((field, bc, -self.vg.lib.flip(field, [0]), bc), 1)
+    
+    def pad_fft_zero_flux_periodic(self, field):
+        """Pad with flipped field in x direction."""
         raise NotImplementedError
 
     def trim_boundary_nodes(self, field):
