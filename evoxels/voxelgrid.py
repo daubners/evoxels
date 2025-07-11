@@ -52,11 +52,11 @@ class VoxelGrid(FDStencils):
         """Pad a field with zeros."""
         raise NotImplementedError
 
-    def fftn(self, field):
+    def fftn(self, field, shape):
         """Compute the n-dimensional discrete Fourier transform."""
         raise NotImplementedError
 
-    def real_of_ifftn(self, field):
+    def real_of_ifftn(self, field, shape):
         """Return the real part of the inverse FFT."""
         raise NotImplementedError
 
@@ -108,9 +108,19 @@ class VoxelGrid(FDStencils):
         return kx**2 + ky**2 + kz**2
     
     def rfft_k_squared(self):
-        fft_axes = self.fft_axes()
-        rfft_axes = self.rfft_axes()
-        kx, ky, kz = self.lib.meshgrid(fft_axes[0], fft_axes[1], rfft_axes[2], indexing='ij')
+        a_x, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+        kx, ky, kz = self.lib.meshgrid(a_x, a_y, a_z, indexing='ij')
+        return kx**2 + ky**2 + kz**2
+    
+    def fft_k_squared_nonperiodic(self):
+        if self.convention == 'cell_center':
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0], d=self.spacing[0])
+        else:   
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0]-2, d=self.spacing[0])
+        _, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+        kx, ky, kz = self.lib.meshgrid(a_x, a_y, a_z, indexing='ij')
         return kx**2 + ky**2 + kz**2
     
     def init_scalar_field(self, array):
@@ -187,17 +197,17 @@ class VoxelGridTorch(VoxelGrid):
     def pad_zeros(self, field):
         return self.torch.nn.functional.pad(field, (1,1,1,1,1,1), mode='constant', value=0)
 
-    def fftn(self, field):
-        return self.torch.fft.fftn(field, s=self.shape)
+    def fftn(self, field, shape):
+        return self.torch.fft.fftn(field, s=shape)
 
-    def rfftn(self, field):
-        return self.torch.fft.rfftn(field, s=self.shape)
+    def rfftn(self, field, shape):
+        return self.torch.fft.rfftn(field, s=shape)
 
-    def irfftn(self, field):
-        return self.torch.fft.irfftn(field, s=self.shape)
+    def irfftn(self, field, shape):
+        return self.torch.fft.irfftn(field, s=shape)
 
-    def real_of_ifftn(self, field):
-        return self.torch.real(self.torch.fft.ifftn(field, s=self.shape))
+    def real_of_ifftn(self, field, shape):
+        return self.torch.real(self.torch.fft.ifftn(field, s=shape))
 
     def expand_dim(self, field, dim):
         return field.unsqueeze(dim)
@@ -243,17 +253,17 @@ class VoxelGridJax(VoxelGrid):
         pad_width = ((0, 0), (1, 1), (1, 1), (1, 1))
         return self.jnp.pad(field, pad_width, mode='constant', constant_values=0)
 
-    def fftn(self, field):
-        return self.jnp.fft.fftn(field, s=self.shape)
+    def fftn(self, field, shape):
+        return self.jnp.fft.fftn(field, s=shape)
 
-    def rfftn(self, field):
-        return self.jnp.fft.rfftn(field, s=self.shape)
+    def rfftn(self, field, shape):
+        return self.jnp.fft.rfftn(field, s=shape)
 
-    def irfftn(self, field):
-        return self.jnp.fft.irfftn(field, s=self.shape)
+    def irfftn(self, field, shape):
+        return self.jnp.fft.irfftn(field, s=shape)
 
-    def real_of_ifftn(self, field):
-        return self.jnp.fft.ifftn(field, s=self.shape).real
+    def real_of_ifftn(self, field, shape):
+        return self.jnp.fft.ifftn(field, s=shape).real
 
     def expand_dim(self, field, dim):
         return self.jnp.expand_dims(field, dim)

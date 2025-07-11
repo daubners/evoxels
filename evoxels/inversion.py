@@ -2,7 +2,7 @@ from functools import partial
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from typing import Any, Type, Optional
-from evoxels.timesteppers import pseudo_spectral_IMEX_dfx
+from evoxels.timesteppers import PseudoSpectralIMEX_dfx
 
 try:
     import diffrax as dfx
@@ -69,7 +69,7 @@ class InversionModel:
         if self.pos_params:
             parameters = {k: jnp.exp(v) if k in self.pos_params else v for k, v in parameters.items()}
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
-        solver = pseudo_spectral_IMEX_dfx(problem.fourier_symbol)
+        solver = PseudoSpectralIMEX_dfx(problem.fourier_symbol)
 
         solution = dfx.diffeqsolve(
             dfx.ODETerm(lambda t, y, args: problem.rhs(y, t)),
@@ -83,7 +83,7 @@ class InversionModel:
             throw=False,
             adjoint=adjoint,
         )
-        padded = problem.pad_boundary_conditions(solution.ys[:, 0])
+        padded = problem.pad_bc(solution.ys[:, 0])
         out = self.vg.bc.trim_ghost_nodes(padded)
         return out
     
