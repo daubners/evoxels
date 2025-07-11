@@ -31,7 +31,9 @@ autodoc_mock_imports = [
     'jax',
     'sympy',
     'diffrax',
-    'optimistix'
+    'optimistix',
+    'PIL',
+    'taufactor'
 ]
 exclude_patterns = ['_build']
 
