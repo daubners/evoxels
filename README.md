@@ -5,9 +5,7 @@ A differentiable physics framework for voxel-based microstructure simulations
 
 For more detailed information about the code [read the docs](https://evoxels.readthedocs.io).
 
-<p align="center">
-  <img src="evoxels.png" width="90%"></img>
-</p>
+![Evoxels overview](https://raw.githubusercontent.com/daubners/evoxels/main/evoxels.png)
 
 ```
 In a world of cubes and blocks,

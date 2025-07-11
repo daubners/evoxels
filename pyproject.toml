@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evoxels"
-version = "0.1.0"
-description = "Voxel-based structure simulation solvers"
+version = "0.1.1"
+description = "Differentiable physics framework for voxel-based microstructure simulations"
 authors = [
     { name = "Simon Daubner", email = "s.daubner@imperial.ac.uk" }
 ]
