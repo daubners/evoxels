@@ -2,10 +2,10 @@
 title: 'evoxels: A differentiable physics framework for voxel-based microstructure simulations'
 tags:
   - Python
-  - astronomy
-  - dynamics
-  - galactic dynamics
-  - milky way
+  - materials science
+  - differentiable physics
+  - phase-field method
+  - microstructure
 authors:
   - name: Simon Daubner
     orcid: 0000-0002-7944-6026
@@ -34,7 +34,7 @@ bibliography: paper.bib
 
 Materials science inherently spans disciplines: experimentalists use advanced microscopy to uncover micro- and nanoscale structure, while theorists and computational scientists develop models that link processing, structure, and properties. Bridging these domains is essential for inverse material design where you start from desired performance and work backwards to optimal microstructures and manufacturing routes. Integrating high-resolution imaging with predictive simulations and data‐driven optimization accelerates discovery and deepens understanding of process–structure–property relationships.
 
-![Artwork visualizing the core idea of evoxels: a Python-based differentiable physics framework for simulating and analyzing 3D voxelized microstructures.\label{fig:evoxels}](evoxels.png){ width=90% }
+![Artwork visualizing the core idea of evoxels: a Python-based differentiable physics framework for simulating and analyzing 3D voxelized microstructures.\label{fig:evoxels}](evoxels.png)
 
 The differentiable physics framework **evoxels** is based on a fully Pythonic, unified voxel-based approach that integrates segmented 3D microscopy data, physical simulations, inverse modeling, and machine learning.
 
@@ -47,7 +47,7 @@ While not intended to replace general finite-element or multi-physics platforms,
 
 From a high-level perspective, evoxels is organized around two core abstractions: VoxelFields and VoxelGrid. VoxelFields provides a uniform, NumPy-based container for any number of 3D fields on the same regular grid, maximizing interoperability with image I/O libraries (e.g. tifffile, h5py, napari, scikit-image) and visualization tools (PyVista, VTK). VoxelGrid couples these fields to either a PyTorch or JAX backend, offering pre-defined boundary conditions, finite difference stencils and FFT libraries. The implemented solvers leverage advanced Fourier spectral timesteppers (e.g. semi-implicit, exponential integrators), on-the-fly plotting and integrated wall-time and RAM profiling. A suite of predefined PDE “problems” (e.g. Cahn–Hilliard, reaction-diffusion, multi-phase evolution) can be solved out of the box or extended via user-defined ODEs classes with custom right-hand sides. Integrated convergence tests ensure each discretization achieves the expected order before it ever touches real microscopy data.
 
-![Visualisation of package concept. The VoxelFields class acts as the user interface for organising 3D fields on a regular grid including plotting and export functions. Solvers are assembled in a modular fashion. The chosen timestepper and ODE class are just-in-time compiled (green becomes one kernel) based on the given VoxelGrid backend.\label{fig:evoxels-code-logic}](evoxels-code-logic.png){ width=90% }
+![Visualisation of package concept. The VoxelFields class acts as the user interface for organising 3D fields on a regular grid including plotting and export functions. Solvers are assembled in a modular fashion. The chosen timestepper and ODE class are just-in-time compiled (green becomes one kernel) based on the given VoxelGrid backend.\label{fig:evoxels-code-logic}](evoxels-code-logic.png)
 
 **evoxels** is aimed squarely at researchers who need a “plug-in-your-image, get-your-answer” workflow for digital materials science and inverse design. Experimentalists can feed segmented FIB-SEM or X-ray tomograms directly into high-performance simulations; computational scientists and modelers benefit from a truly open, reproducible framework. It speaks to anyone who wants special-purpose solvers for representative volume elements - without the overhead of mesh generation - while still offering the flexibility to develop new solvers, test boundary conditions, and incorporate machine-learning-driven optimization. evoxels provides both the turnkey usability of a specialized package and the extensibility of a low-level research toolkit for e.g. benchmarking tortuosity, fitting diffusion coefficients, or prototyping novel phase-field models.
 
@@ -73,7 +73,7 @@ To evaluate performance against state-of-the-art python libraries, we benchmark 
 
 ![Comparison of wall time and maximum GPU memory usage for the Cahn-Hilliard (CH) problem. Wall time for solving 1000 timesteps with fixed stepsize $\Delta t=1$ based on pseudo-spectral IMEX scheme with evoxels-torch (blue) and evoxels-jax (red) - both with and without just-in-time (jit) compilation; pseudo spectral IMEX scheme as custom diffrax solver (orange); and tsit5 scheme in combination with a PID timestep controller in torchode (green) and diffrax (purple). Vertical lines denote maximum problem size on Nvidia RTX A6000 for reference. Black datapoints refer to spectral element simulation of CH using MATLAB on Nvidia A100 [@XinyuLiu2024]. GPU memory footprint of all pytorch-based simulations shown in  b) shows linear scaling with amount of voxels.\label{fig:benchmark}](benchmark.png)
 
-evoxels positions itself as a lightweight, accessible, and rigorously tested tool for prototyping voxel-based PDE solvers. Compared to domain-specific tools like taufactor [@Cooper2016; @Kench2023] and magnum.np [@Bruckner2023], evoxels supports a broader range of problems, boundary conditions, and numerical methods while maintaining a modular, user-friendly interface for imaging-driven workflows.
+evoxels positions itself as a lightweight, accessible, and rigorously tested tool for prototyping voxel-based PDE solvers. Compared to domain-specific tools like taufactor [@Kench2023] and magnum.np [@Bruckner2023], evoxels supports a broader range of problems, boundary conditions, and numerical methods while maintaining a modular, user-friendly interface for imaging-driven workflows.
 At the same time, it is more specialized and efficient for problems on uniform grids with fixed physics than general-purpose solvers like FiPy or FEniCS.
 evoxels is not intended to replace multiphysics platforms such as COMSOL or MOOSE, but to complement them by filling a niche in high-resolution, imaging-driven, and differentiable simulations.
 
