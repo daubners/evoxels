@@ -57,7 +57,7 @@ mask_fun = 0.5 + 0.3*sp.cos(4*sp.pi*CS.x) * sp.cos(2*sp.pi*CS.y)
 def test_reaction_diffusion_smoothed_boundary_rhs():
     _, _, slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusionSBM,
-        problem_kwargs = {"D": 1.0, "BC_type": 'dirichlet', "bcs": (0,1),},
+        problem_kwargs = {"D": 1.0, "BC_type": 'dirichlet', "bcs": (0,1), "bc_flux": 1},
         test_function  = test_fun_sbm,
         mask_function  = mask_fun,
         convention     = 'staggered_x',
