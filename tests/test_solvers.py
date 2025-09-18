@@ -14,7 +14,7 @@ def test_time_solver_multiple_fields():
     vf.add_field("a", np.ones(vf.shape))
     vf.add_field("b", np.zeros(vf.shape))
 
-    def step(u, t):
+    def step(t, u):
         return u + 1
 
     solver = TimeDependentSolver(vf, ["a", "b"], backend="torch", step_fn=step, device="cpu")

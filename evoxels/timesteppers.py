@@ -16,13 +16,13 @@ class TimeStepper(ABC):
         pass
 
     @abstractmethod
-    def step(self, u: State, t: float) -> State:
+    def step(self, t: float, u: State) -> State:
         """
         Take one timestep from t to (t+dt).
 
         Args:
-            u       : Current state
             t       : Current time
+            u       : Current state
         Returns:
             Updated state at t + dt.
         """
@@ -39,8 +39,8 @@ class ForwardEuler(TimeStepper):
     def order(self) -> int:
         return 1
 
-    def step(self, u: State, t: float) -> State:
-        return u + self.dt * self.problem.rhs(u, t)
+    def step(self, t: float, u: State) -> State:
+        return u + self.dt * self.problem.rhs(t, u)
 
 
 @dataclass
@@ -68,8 +68,8 @@ class PseudoSpectralIMEX(TimeStepper):
     def order(self) -> int:
         return 1
 
-    def step(self, u: State, t: float) -> State:
-        dc = self.pad(self.problem.rhs(u, t))
+    def step(self, t: float, u: State) -> State:
+        dc = self.pad(self.problem.rhs(t, u))
         dc_fft = self._fft_prefac * self.problem.vg.rfftn(dc, dc.shape)
         update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
         return u + update

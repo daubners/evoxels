@@ -99,7 +99,7 @@ class TimeDependentSolver:
                 self._handle_outputs(u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap)
                 frame += 1
 
-            u = step(u, time)
+            u = step(time, u)
 
         end = timer()
         time = max_iters * time_increment
@@ -129,6 +129,7 @@ class TimeDependentSolver:
             filename = self.problem_cls.__name__ + "_" +\
                        self.fieldnames[0] + f"_{frame:03d}.vtk"
             self.vf.export_to_vtk(filename=filename, field_names=self.fieldnames)
+
         if verbose == 'plot':
             clear_output(wait=True)
             self.vf.plot_slice(self.fieldnames[0], slice_idx, time=time, colormap=colormap, value_bounds=plot_bounds)
