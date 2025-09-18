@@ -88,16 +88,16 @@ def rhs_convergence_test(
             problem_kwargs["mask"] = mask(*grid)
 
         ODE = ODE_class(vg, **problem_kwargs)
-        rhs_numeric = ODE.rhs(u, 0)
+        rhs_numeric = ODE.rhs(0, u)
 
         if n_funcs > 1 and mask is not None:
-            rhs_analytic = ODE.rhs_analytic(mask_function, test_functions, 0)
+            rhs_analytic = ODE.rhs_analytic(0, test_functions, mask_function)
         elif n_funcs > 1 and mask is None:
-            rhs_analytic = ODE.rhs_analytic(test_functions, 0)
+            rhs_analytic = ODE.rhs_analytic(0, test_functions)
         elif n_funcs == 1 and mask is not None:
-            rhs_analytic = [ODE.rhs_analytic(mask_function, test_functions[0], 0)]
+            rhs_analytic = [ODE.rhs_analytic(0, test_functions[0], mask_function)]
         else:
-            rhs_analytic = [ODE.rhs_analytic(test_functions[0], 0)]
+            rhs_analytic = [ODE.rhs_analytic(0, test_functions[0])]
 
         # Compute solutions
         for j, func in enumerate(test_functions):

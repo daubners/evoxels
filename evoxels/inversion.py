@@ -72,7 +72,7 @@ class InversionModel:
         solver = PseudoSpectralIMEX_dfx(problem.fourier_symbol)
 
         solution = dfx.diffeqsolve(
-            dfx.ODETerm(lambda t, y, args: problem.rhs(y, t)),
+            dfx.ODETerm(lambda t, y, args: problem.rhs(t, y)),
             solver,
             t0=saveat.subs.ts[0],
             t1=saveat.subs.ts[-1],

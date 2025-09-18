@@ -18,12 +18,12 @@ class ODE(ABC):
         pass
 
     @abstractmethod
-    def rhs_analytic(self, u, t):
+    def rhs_analytic(self, t, u):
         """Sympy expression of the problem right-hand side.
 
         Args:
-            u : Sympy function of current state.
             t (float): Current time.
+            u : Sympy function of current state.
 
         Returns:
             Sympy function of problem right-hand side.
@@ -31,12 +31,12 @@ class ODE(ABC):
         pass
 
     @abstractmethod
-    def rhs(self, u, t):
+    def rhs(self, t, u):
         """Numerical right-hand side of the ODE system.
 
         Args:
-            u (array): Current state.
             t (float): Current time.
+            u (array): Current state.
 
         Returns:
             Same type as ``u`` containing the time derivative.
@@ -122,7 +122,7 @@ class ReactionDiffusion(SemiLinearODE):
             k_squared = self.vg.fft_k_squared_nonperiodic()
 
         self._fourier_symbol = -self.D * self.A * k_squared
-    
+
     @property
     def order(self):
         return 2
@@ -130,14 +130,14 @@ class ReactionDiffusion(SemiLinearODE):
     @property
     def fourier_symbol(self):
         return self._fourier_symbol
-    
-    def _eval_f(self, c, t, lib):
+
+    def _eval_f(self, t, c, lib):
         """Evaluate source/forcing term using ``self.f``."""
         try:
-            return self.f(c, t, lib)
+            return self.f(t, c, lib)
         except TypeError:
-            return self.f(c, t)
-        
+            return self.f(t, c)
+
     @property
     def bc_type(self):
         return self.BC_type
@@ -145,12 +145,12 @@ class ReactionDiffusion(SemiLinearODE):
     def pad_bc(self, u):
         return self.pad_boundary(u, self.bcs[0], self.bcs[1])
     
-    def rhs_analytic(self, u, t):
-        return self.D*spv.laplacian(u) + self._eval_f(u, t, sp)
-    
-    def rhs(self, u, t):
+    def rhs_analytic(self, t, u):
+        return self.D*spv.laplacian(u) + self._eval_f(t, u, sp)
+
+    def rhs(self, t, u):
         laplace = self.vg.laplace(self.pad_bc(u))
-        update = self.D * laplace + self._eval_f(u, t, self.vg.lib)
+        update = self.D * laplace + self._eval_f(t, u, self.vg.lib)
         return update
 
 @dataclass
@@ -185,15 +185,15 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
     def pad_bc(self, u):
         return self.pad_boundary(u, self.bcs[0], self.bcs[1])
 
-    def rhs_analytic(self, mask, u, t):
+    def rhs_analytic(self, t, u, mask):
         grad_m = spv.gradient(mask)
         norm_grad_m = sp.sqrt(grad_m.dot(grad_m))
 
         divergence = spv.divergence(self.D*(spv.gradient(u) - u/mask*grad_m))
-        du = divergence + norm_grad_m*self.bc_flux + mask*self._eval_f(u/mask, t, sp)
+        du = divergence + norm_grad_m*self.bc_flux + mask*self._eval_f(t, u/mask, sp)
         return du
 
-    def rhs(self, u, t):
+    def rhs(self, t, u):
         z = self.pad_bc(u)
         divergence = self.vg.grad_x_face(self.vg.grad_x_face(z) -\
                         self.vg.to_x_face(z/self.mask) * self.vg.grad_x_face(self.mask)
@@ -207,7 +207,7 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
 
         update = self.D * divergence + \
                  self.norm*self.bc_flux + \
-                 self.mask[:,1:-1,1:-1,1:-1]*self._eval_f(u/self.mask[:,1:-1,1:-1,1:-1], t, self.vg.lib)
+                 self.mask[:,1:-1,1:-1,1:-1]*self._eval_f(t, u/self.mask[:,1:-1,1:-1,1:-1], self.vg.lib)
         return update
 
 
@@ -249,13 +249,13 @@ class PeriodicCahnHilliard(SemiLinearODE):
         except TypeError:
             return self.mu_hom(c)
 
-    def rhs_analytic(self, c, t):
+    def rhs_analytic(self, t, c):
         mu = self._eval_mu(c, sp) - 2*self.eps*spv.laplacian(c)
         fluxes = self.D*c*(1-c)*spv.gradient(mu)
         rhs = spv.divergence(fluxes)
         return rhs
 
-    def rhs(self, c, t):
+    def rhs(self, t, c):
         r"""Evaluate :math:`\partial c / \partial t` for the CH equation.
 
         Numerical computation of
@@ -341,7 +341,7 @@ class AllenCahnEquation(SemiLinearODE):
         except TypeError:
             return self.potential(phi)
 
-    def rhs_analytic(self, phi, t):
+    def rhs_analytic(self, t, phi):
         grad = spv.gradient(phi)
         laplace  = spv.laplacian(phi)
         norm_grad = sp.sqrt(grad.dot(grad))
@@ -354,7 +354,7 @@ class AllenCahnEquation(SemiLinearODE):
                   + 3/self.eps * phi * (1-phi) * self.force
         return self.M * df_dphi
 
-    def rhs(self, phi, t):
+    def rhs(self, t, phi):
         r"""Two-phase Allen-Cahn equation
         
         Microstructural evolution of the order parameter ``\phi``
@@ -422,13 +422,13 @@ class CoupledReactionDiffusion(SemiLinearODE):
         except TypeError:
             return self.interaction(u)
 
-    def rhs_analytic(self, u, t):
+    def rhs_analytic(self, t, u):
         interaction = self._eval_interaction(u, sp)
         dc_A = self.D_A*spv.laplacian(u[0]) - interaction + self.feed * (1-u[0])
         dc_B = self.D_B*spv.laplacian(u[1]) + interaction - self.kill * u[1]
         return (dc_A, dc_B)
 
-    def rhs(self, u, t):
+    def rhs(self, t, u):
         r"""Two-component reaction-diffusion system
         
         Use batch channels for multiple species:
