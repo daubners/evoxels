@@ -23,7 +23,7 @@ def run_allen_cahn_solver(
     plot_bounds = None,
 ):
     """
-    Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
+    Solves time-dependent Allen-Cahn problem with ForwardEuler timestepper.
     """
     solver = TimeDependentSolver(
         voxelfields,

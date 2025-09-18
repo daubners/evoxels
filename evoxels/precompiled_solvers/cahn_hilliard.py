@@ -20,7 +20,7 @@ def run_cahn_hilliard_solver(
     plot_bounds = None,
 ):
     """
-    Runs the Cahn-Hilliard solver with a predefined problem and timestepper.
+    Solves time-dependent Cahn-Hilliard problem with PseudoSpectralIMEX timestepper.
     """
     solver = TimeDependentSolver(
         voxelfields,

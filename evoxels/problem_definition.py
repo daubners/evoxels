@@ -186,11 +186,11 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
         return self.pad_boundary(u, self.bcs[0], self.bcs[1])
 
     def rhs_analytic(self, mask, u, t):
-        grad = spv.gradient(u)
-        norm_grad = sp.sqrt(grad.dot(grad))
+        grad_m = spv.gradient(mask)
+        norm_grad_m = sp.sqrt(grad_m.dot(grad_m))
 
-        divergence = spv.divergence(self.D*(grad - u/mask*spv.gradient(mask)))
-        du = divergence + norm_grad*self.bc_flux + mask*self._eval_f(u/mask, t, sp)
+        divergence = spv.divergence(self.D*(spv.gradient(u) - u/mask*grad_m))
+        du = divergence + norm_grad_m*self.bc_flux + mask*self._eval_f(u/mask, t, sp)
         return du
 
     def rhs(self, u, t):
