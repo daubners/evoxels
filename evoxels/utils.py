@@ -381,6 +381,7 @@ def plot_error_surface(series, log_axes=(True, True, True), z_max=0, title=None,
     ax = fig.add_subplot(111, projection='3d')
     legend_patches = []
 
+    count = 0
     for i, s in enumerate(series):
         if not isinstance(s, dict) or not all(k in s for k in ('dt', 'dx', 'error')):
             raise ValueError(f"Item {i} must be a dict with keys 'dt', 'dx', 'error' (and optional 'name').")
@@ -388,6 +389,7 @@ def plot_error_surface(series, log_axes=(True, True, True), z_max=0, title=None,
         x_in = np.asarray(s['dt'])
         y_in = np.asarray(s['dx'])
         Z = np.asarray(s['error'])
+        Z = np.expand_dims(Z, axis=0) if Z.ndim == 2 else Z
         name = s.get('name', f'[{i}]')
 
         # Handle (1D,1D,2D) or (2D,2D,2D)
@@ -396,7 +398,7 @@ def plot_error_surface(series, log_axes=(True, True, True), z_max=0, title=None,
         else:
             raise ValueError(f"Item {i}: dt and dx must both be 1D grids.")
 
-        if Z.shape != X.shape:
+        if Z.shape[1:] != X.shape:
             raise ValueError(f"Item {i}: z.shape {Z.shape} must match x/y grid shape {X.shape}.")
 
         # Apply log scaling
@@ -408,19 +410,20 @@ def plot_error_surface(series, log_axes=(True, True, True), z_max=0, title=None,
         else:
             Zp = Z
 
-        color = base_colors[i % len(base_colors)]
-
-        ax.plot_surface(
-            Xp, Yp, Zp,
-            color=color,         # uniform color per surface
-            alpha=alpha,         # semi-transparent tiles
-            edgecolor=color,     # solid mesh lines
-            linewidth=0.6,
-            antialiased=True,
-            shade=False
-        )
-
-        legend_patches.append(Patch(facecolor=color, edgecolor=color, alpha=alpha, label=name))
+        for j in range(s['n_funcs']):
+            color = base_colors[count % len(base_colors)]
+            ax.plot_surface(
+                Xp, Yp, Zp[j],
+                color=color,         # uniform color per surface
+                alpha=alpha,         # semi-transparent tiles
+                edgecolor=color,     # solid mesh lines
+                linewidth=0.6,
+                antialiased=True,
+                shade=False
+            )
+            label = name + f"_u{j}" if j > 0 else name
+            legend_patches.append(Patch(facecolor=color, edgecolor=color, alpha=alpha, label=label))
+            count += 1
 
     # Axis labels reflect log choice
     ax.set_xlabel('log10(dt)' if log_x else 'dt')
