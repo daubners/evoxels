@@ -13,7 +13,7 @@ _i_ = slice(1, -1)  # inner elements [1:-1]
 class ODE(ABC):
     @property
     @abstractmethod
-    def order(self):
+    def order(self) -> int:
         """Spatial order of convergence for numerical right-hand side."""
         pass
 
