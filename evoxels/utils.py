@@ -5,6 +5,9 @@ import evoxels as evo
 from evoxels.problem_definition import SmoothedBoundaryODE
 from evoxels.solvers import TimeDependentSolver
 import contextlib, io
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
+from matplotlib.patches import Patch
 
 ### Generalized test case
 def rhs_convergence_test(
@@ -141,7 +144,7 @@ def mms_convergence_test(
     g_powers = np.array([3,4,5,6,7]),
     t_powers = np.array([3,4,5,6,7]),
     t_final = 1,
-    backend = "torch",
+    backend = "jax",
     device = 'cpu'
 ):
     """Evaluate temporal and spatial order of ODE solution.
@@ -322,18 +325,112 @@ def mms_convergence_test(
                 errors[j, k, i] = np.linalg.norm(diff) / np.linalg.norm(exact)
 
     # Fit slope after loop
-    t_slopes = np.array(
-        [np.polyfit(np.log(dt), np.log(err[:,-1]), 1)[0] for err in errors]
-    )
-    g_slopes = np.array(
-        [np.polyfit(np.log(dx), np.log(err[-1,:]), 1)[0] for err in errors]
-    )
-    if n_funcs == 1:
-        t_slopes = t_slopes[0]
-        g_slopes = g_slopes[0]
-    t_order = timestepper.order
-    g_order = ODE.order
+    def calc_slope(x, y):
+        mask = np.isfinite(y)
+        if mask.sum() < 2:
+            return np.nan
+        return np.polyfit(np.log(x[mask]), np.log(y[mask]), 1)[0]
 
-    return errors if errors.shape[0] > 1 else errors[0], \
-           dt, t_slopes, t_order, \
-           dx, g_slopes, g_order
+    t_slopes = np.array([calc_slope(dt, err[:,0]) for err in errors])
+    g_slopes = np.array([calc_slope(dx, err[-1,:]) for err in errors])
+
+    results = {
+        'dt': dt,
+        'dx': dx,
+        'error': errors if n_funcs > 1 else errors[0],
+        't_slopes': t_slopes if n_funcs > 1 else t_slopes[0],
+        'g_slopes': g_slopes if n_funcs > 1 else g_slopes[0],
+        'n_funcs': n_funcs,
+        't_order': timestepper.order,
+        'g_order': ODE.order,
+    }
+    return results
+
+
+def plot_error_surface(series, log_axes=(True, True, True), z_max=0, title=None, alpha=0.4):
+    """
+    Plot one or more 3D surfaces z(x, y) with semi-transparent tiles and solid mesh lines.
+
+    Parameters
+    ----------
+    series : tuple[list] of dict
+        Each dict must have:
+          - 'dt': 1D array-like of dt-values  (length Nx)
+          - 'dx': 1D array-like of dx-values  (length Ny)
+          - 'error': 2D array-like of values Z(X, Y) with shape (Nx, Ny)
+          - 'name': (optional) label for legend
+    log_axes : tuple(bool, bool, bool)
+        (log_x, log_y, log_z): apply log10 to respective axis data when True.
+        For Z, nonpositive values are masked to NaN before log10.
+    title : str or None
+        Plot title.
+    alpha : float
+        Face transparency for surfaces.
+    """
+    if not isinstance(series, (list, tuple)) or len(series) == 0:
+        raise ValueError("`series` must be a non-empty tuple/list of dictionaries.")
+
+    log_x, log_y, log_z = log_axes
+
+    # Distinct colors
+    base_colors = ['tab:red', 'tab:blue', 'tab:green', 'tab:gray',
+                   'tab:purple', 'tab:brown', 'tab:pink', 'tab:orange',
+                   'tab:olive', 'tab:cyan']
+
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111, projection='3d')
+    legend_patches = []
+
+    for i, s in enumerate(series):
+        if not isinstance(s, dict) or not all(k in s for k in ('dt', 'dx', 'error')):
+            raise ValueError(f"Item {i} must be a dict with keys 'dt', 'dx', 'error' (and optional 'name').")
+
+        x_in = np.asarray(s['dt'])
+        y_in = np.asarray(s['dx'])
+        Z = np.asarray(s['error'])
+        name = s.get('name', f'[{i}]')
+
+        # Handle (1D,1D,2D) or (2D,2D,2D)
+        if x_in.ndim == 1 and y_in.ndim == 1:
+            X, Y = np.meshgrid(x_in, y_in, indexing='ij')  # (Nx, Ny)
+        else:
+            raise ValueError(f"Item {i}: dt and dx must both be 1D grids.")
+
+        if Z.shape != X.shape:
+            raise ValueError(f"Item {i}: z.shape {Z.shape} must match x/y grid shape {X.shape}.")
+
+        # Apply log scaling
+        Xp = np.log10(X) if log_x else X
+        Yp = np.log10(Y) if log_y else Y
+        if log_z:
+            Z = np.where(Z > 0, Z, np.nan)
+            Zp = np.log10(Z)
+        else:
+            Zp = Z
+
+        color = base_colors[i % len(base_colors)]
+
+        ax.plot_surface(
+            Xp, Yp, Zp,
+            color=color,         # uniform color per surface
+            alpha=alpha,         # semi-transparent tiles
+            edgecolor=color,     # solid mesh lines
+            linewidth=0.6,
+            antialiased=True,
+            shade=False
+        )
+
+        legend_patches.append(Patch(facecolor=color, edgecolor=color, alpha=alpha, label=name))
+
+    # Axis labels reflect log choice
+    ax.set_xlabel('log10(dt)' if log_x else 'dt')
+    ax.set_ylabel('log10(dx)' if log_y else 'dx')
+    ax.text2D(0.0, 0.8, 'log10(error)' if log_z else 'error',
+              transform=ax.transAxes, va="top", ha="left")
+    ax.set_zlim(top=z_max)
+    ax.set_title(title or 'Error Surfaces')
+    ax.view_init(elev=25., azim=-145, roll=0)
+
+    ax.legend(handles=legend_patches, loc='best')
+    fig.tight_layout()
+    plt.show()
