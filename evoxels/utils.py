@@ -4,7 +4,8 @@ import sympy.vector as spv
 import evoxels as evo
 from evoxels.problem_definition import SmoothedBoundaryODE
 from evoxels.solvers import TimeDependentSolver
-import contextlib, io
+import contextlib
+import io
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
 from matplotlib.patches import Patch
@@ -43,7 +44,6 @@ def rhs_convergence_test(
             "is not a SmoothedBoundaryODE."
         )
     CS = spv.CoordSys3D('CS')
-    t = sp.symbols('t', real=True)
 
     # Prepare lambdified mask if needed
     # Assumed to be static i.e. no function of t
