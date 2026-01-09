@@ -6,50 +6,69 @@ on:
 
 jobs:
   test:
+    name: Test (Python 3.12)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install .[torch,jax,dev]
-    - name: Lint with ruff
-      run: |
-        ruff check .
-    - name: Test with pytest
-      run: |
-        pytest
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[torch,jax,dev]
+      - name: Lint with ruff
+        run: |
+          ruff check .
+      - name: Test with pytest
+        run: |
+          pytest
 
   build:
+    name: Build distributions
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
       - name: Build distributions
         run: |
-          python -m pip install --upgrade build
+          python -m pip install --upgrade pip build
           python -m build
-      - uses: actions/upload-artifact@v4
-        with:
-          path: dist/*
-          name: dist
 
-  publish-PyPI:
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Download dist
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
+          packages_dir: dist
