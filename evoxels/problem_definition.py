@@ -120,6 +120,8 @@ class ReactionDiffusion(SemiLinearODE):
             bc_fun = self.vg.bc.pad_zero_flux_periodic
             self.pad_boundary = lambda field, bc0, bc1: bc_fun(field)
             k_squared = self.vg.fft_k_squared_nonperiodic()
+        else:
+            raise ValueError(f"Unsupported BC type: {self.BC_type}")
 
         self._fourier_symbol = -self.D * self.A * k_squared
 
