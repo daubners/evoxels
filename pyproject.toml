@@ -53,7 +53,7 @@ dev = [
 notebooks = [
     "ipywidgets",
     "ipympl",
-    "notebook"
+    "notebook",
     "taufactor"
 ]
 
