@@ -37,7 +37,7 @@ TL;DR
 ```bash
 conda create --name voxenv python=3.12
 conda activate voxenv
-pip install evoxels[torch,jax,dev,notebooks]
+pip install "evoxels[torch,jax,dev,notebooks]"
 pip install --upgrade "jax[cuda12]"
 ```
 
@@ -59,7 +59,7 @@ Navigate to the evoxels folder, then
 ```
 pip install -e .[torch] # install with torch backend
 pip install -e .[jax]   # install with jax backend
-pip install -e .[dev, notebooks] # install testing and notebooks
+pip install -e .[dev,notebooks] # install testing and notebooks
 ```
 Note that the default `[jax]` installation is only CPU compatible. To install the corresponding CUDA libraries check your CUDA version with
 ```bash
@@ -71,7 +71,7 @@ pip install -U "jax[cuda12]"
 ```
 To install both backends within one environment it is important to install torch first and then upgrade the `jax` installation e.g.
 ```bash
-pip install evoxels[torch, jax, dev, notebooks]
+pip install "evoxels[torch,jax,dev,notebooks]"
 pip install --upgrade "jax[cuda12]"
 ```
 To work with the example notebooks install Jupyter and all notebook related dependencies via
