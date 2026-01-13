@@ -215,6 +215,8 @@ def mms_convergence_test(
             vf = evo.VoxelFields((2**p, 2**p, 2**p), (1, 1, 1), convention=convention)
         elif convention == 'staggered_x':
             vf = evo.VoxelFields((2**p + 1, 2**p, 2**p), (1, 1, 1), convention=convention)
+        else:
+            raise ValueError("Chosen convention must be cell_center or staggered_x.")
         vf.precision = dtype
         dx[i] = vf.spacing[0]
     
@@ -231,6 +233,8 @@ def mms_convergence_test(
         ODE = ODE_class(vg, **problem_kwargs)
         rhs_orig = ODE.rhs
         grid = vg.meshgrid()
+        if convention == 'staggered_x':
+            grid = (grid[0][1:-1,:,:], grid[1][1:-1,:,:], grid[2][1:-1,:,:])
 
         # Construct new rhs including forcing term from MMS
         if mode == 'temporal':
@@ -246,7 +250,6 @@ def mms_convergence_test(
                     u_ex_list.append(vg.expand_dim(u_list[j](t_, *grid), 0))
                     rhs = vg.set(rhs, j, rhs[j] + u_t_list[j](t_, *grid))
                 u_ex = vg.concatenate(u_ex_list, 0)
-                u_ex = vg.bc.trim_boundary_nodes(u_ex)
                 rhs -= rhs_orig(t, u_ex)
                 return rhs
 
@@ -322,7 +325,10 @@ def mms_convergence_test(
             for j, func in enumerate(test_functions):
                 exact = vf.fields[f'u{j}_final']
                 diff = vf.fields[f'u{j}'] - exact
-                errors[j, k, i] = np.linalg.norm(diff) / np.linalg.norm(exact)
+                if convention == 'staggered_x':
+                    errors[j, k, i] = np.linalg.norm(diff[1:-1,:,:]) / np.linalg.norm(exact[1:-1,:,:])
+                else:
+                    errors[j, k, i] = np.linalg.norm(diff) / np.linalg.norm(exact)
 
     # Fit slope after loop
     def calc_slope(x, y):
