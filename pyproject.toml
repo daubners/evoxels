@@ -54,6 +54,7 @@ notebooks = [
     "ipywidgets",
     "ipympl",
     "notebook"
+    "taufactor"
 ]
 
 [tool.setuptools.packages.find]
