@@ -120,6 +120,28 @@ class VoxelFields:
         grid = Grid(self.shape, self.origin, self.spacing, self.convention)
         return grid
 
+    def set_field(self, name: str, array: np.ndarray):
+        """
+        Set field values for an existing field in the voxel grid.
+
+        Args:
+            name (str): Name of the field.
+            array (numpy.ndarray, optional): 3D array.
+
+        Raises:
+            ValueError: If the provided array does not match the voxel grid dimensions.
+            TypeError: If the provided array is not a numpy array.
+        """
+        if isinstance(array, np.ndarray):
+            if array.shape == self.shape:
+                self.fields[name] = array
+            else:
+                raise ValueError(
+                    f"The provided array must have the shape {self.shape}."
+                )
+        else:
+            raise TypeError("The provided array must be a numpy array.")
+        
     def add_field(self, name: str, array=None):
         """
         Adds a field to the voxel grid.
@@ -127,23 +149,11 @@ class VoxelFields:
         Args:
             name (str): Name of the field.
             array (numpy.ndarray, optional): 3D array to initialize the field. If None, initializes with zeros.
-
-        Raises:
-            ValueError: If the provided array does not match the voxel grid dimensions.
-            TypeError: If the provided array is not a numpy array.
         """
         if array is not None:
-            if isinstance(array, np.ndarray):
-                if array.shape == self.shape:
-                    self.fields[name] = array
-                else:
-                    raise ValueError(
-                        f"The provided array must have the shape {self.shape}."
-                    )
-            else:
-                raise TypeError("The provided array must be a numpy array.")
+            self.set_field(name, array)
         else:
-            self.fields[name] = np.zeros(self.shape)
+            self.set_field(name, np.zeros(self.shape))
 
     def set_voxel_sphere(self, name: str, center, radius, label: int | float = 1):
         """Create a voxelized representation of a sphere in 3D
