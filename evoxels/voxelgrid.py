@@ -218,6 +218,28 @@ class VoxelGridTorch(VoxelGrid):
     def concatenate(self, fieldlist, dim):
         return self.torch.cat(fieldlist, dim=dim)
 
+    def argmax(self, field, dim=None, keepdim=False):
+        return self.torch.argmax(field, dim=dim, keepdim=keepdim)
+
+    def mean(self, field, dim=None, keepdim=False):
+        return self.torch.mean(field, dim=dim, keepdim=keepdim)
+
+    def sum(self, field, dim=None, keepdim=False):
+        return self.torch.sum(field, dim=dim, keepdim=keepdim)
+
+    def cumsum(self, field, dim=None):
+        return self.torch.cumsum(field, dim=dim)
+    
+    def sort(self, field, dim=0, descending=False):
+        vals, _ = self.torch.sort(field, dim=dim, descending=descending)
+        return vals
+
+    def arange(self, start, stop):
+        return self.torch.arange(start, stop, dtype=self.precision, device=self.device)
+
+    def take_along_dim(self, field, idx, dim=0):
+        return self.torch.take_along_dim(field, idx, dim=dim)
+
     def set(self, field, index, value):
         field[index] = value
         return field
@@ -273,6 +295,27 @@ class VoxelGridJax(VoxelGrid):
 
     def concatenate(self, fieldlist, dim):
         return self.jnp.concatenate(fieldlist, axis=dim)
+
+    def argmax(self, field, dim=None, keepdim=False):
+        return self.jnp.argmax(field, axis=dim, keepdims=keepdim)
+
+    def mean(self, field, dim=None, keepdim=False):
+        return self.jnp.mean(field, axis=dim, keepdims=keepdim)
+
+    def sum(self, field, dim=None, keepdim=False):
+        return self.jnp.sum(field, axis=dim, keepdims=keepdim)
+    
+    def cumsum(self, field, dim=None):
+        return self.jnp.cumsum(field, axis=dim)
+
+    def sort(self, field, dim=0, descending=False):
+        return self.jnp.sort(field, axis=dim, descending=descending)
+
+    def arange(self, start, stop):
+        return self.jnp.arange(start, stop, dtype=self.precision)
+
+    def take_along_dim(self, field, idx, dim=0):
+        return self.jnp.take_along_axis(field, idx, axis=dim)
 
     def set(self, field, index, value):
         return field.at[index].set(value)
