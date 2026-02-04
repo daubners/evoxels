@@ -4,6 +4,9 @@ from typing import Callable, Any, Type
 from abc import ABC, abstractmethod
 from timeit import default_timer as timer
 import sys
+import warnings
+import numpy as np
+import matplotlib.pyplot as plt
 from .problem_definition import ODE
 from .timesteppers import TimeStepper
 
@@ -111,15 +114,49 @@ class BaseSolver(ABC):
         if verbose:
             self.profiler.print_memory_stats(start, end, max_iters)
 
-    def _handle_outputs(self, u, frame, time, slice_idx, vtk_out, verbose, plot_bounds, colormap):
+    def _export_fields(self, u_out):
+        for i, name in enumerate(self.fieldnames):
+            self.vf.set_field(name, self.vg.export_scalar_field_to_numpy(u_out[i:i+1]))
+
+    def _plot_frame(self, fields, time, colormap, plot_bounds):
+        """Plot a single frame of the specified field."""
+        slice_idx = self.vf.Nz // 2
+        slice = self.vg.to_numpy(fields[0, :, :, slice_idx])
+
+        if not hasattr(self, "_fig"):
+            self._fig, self._ax0 = plt.subplots(nrows=1, ncols=1)
+            start1 = self.vf.origin[0] - self.vf.spacing[0] / 2
+            start2 = self.vf.origin[1] - self.vf.spacing[1] / 2
+            end1 = self.vf.domain_size[0] - start1
+            end2 = self.vf.domain_size[1] - start2
+            extent = [start1, end1, start2, end2]
+
+            if plot_bounds is not None:
+                self._im0 = self._ax0.imshow(slice.T, cmap=colormap, origin='lower', extent=extent,\
+                                             vmin=plot_bounds[0], vmax=plot_bounds[1])
+            else:
+                self._im0 = self._ax0.imshow(slice.T, cmap=colormap, origin='lower', extent=extent)
+            ratio = np.clip((end2 - start2) / (end1 - start1), 0, 1)
+            self._cbar = self._fig.colorbar(self._im0, ax=self._ax0, shrink=ratio)
+            self._ax0.set_xlabel("X")
+            self._ax0.set_ylabel("Y")
+        else:
+            self._im0.set_data(slice.T)
+            if plot_bounds is None:
+                self._im0.set_clim(float(slice.min()), float(slice.max()))
+                self._cbar.update_normal(self._im0)
+
+        self._ax0.set_title(f"Slice {slice_idx} of {self.fieldnames[0]} in z at time {time}")
+        self._fig.canvas.draw_idle()
+        self._fig.canvas.flush_events()
+
+    def _handle_outputs(self, u, frame, time, vtk_out, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
             u_out = self.vg.bc.trim_ghost_nodes(self.problem.pad_bc(u))
         else:
             u_out = self.vg.bc.trim_ghost_nodes(self.vg.pad_zeros(u))
-
-        for i, name in enumerate(self.fieldnames):
-            self.vf.set_field(name, self.vg.export_scalar_field_to_numpy(u_out[i:i+1]))
+        self._export_fields(u_out)
 
         if verbose:
             self.profiler.update_memory_stats()
@@ -134,8 +171,21 @@ class BaseSolver(ABC):
             self.vf.export_to_vtk(filename=filename, field_names=self.fieldnames)
 
         if verbose == 'plot':
-            clear_output(wait=True)
-            self.vf.plot_slice(self.fieldnames[0], slice_idx, time=time, colormap=colormap, value_bounds=plot_bounds)
+            if not plt.isinteractive():
+                plt.ion()
+
+            self._plot_frame(u, time, colormap, plot_bounds)
+            try:
+                from IPython.display import display
+                if not hasattr(self, "_disp"):
+                    self._disp = display(self._fig, display_id=True)
+                    if not hasattr(self, "_closed"):
+                        plt.close(self._fig)
+                        self._closed = True
+                else:
+                    self._disp.update(self._fig)
+            except Exception:
+                pass
 
 @dataclass
 class TimeDependentSolver(BaseSolver):
@@ -144,18 +194,17 @@ class TimeDependentSolver(BaseSolver):
                   vtk_out, verbose, plot_bounds, colormap):
         n_out = max_iters // frames
         frame = 0
-        slice_idx = self.vf.Nz // 2
 
         for i in range(max_iters):
             time = i * time_increment
             if i % n_out == 0:
-                self._handle_outputs(u, frame, time, slice_idx, vtk_out,
+                self._handle_outputs(u, frame, time, vtk_out,
                                      verbose, plot_bounds, colormap)
                 frame += 1
 
             u = step(time, u)
         time = max_iters * time_increment
-        self._handle_outputs(u, frame, time, slice_idx, vtk_out,
+        self._handle_outputs(u, frame, time, vtk_out,
                              verbose, plot_bounds, colormap)
         return u
 
@@ -167,7 +216,6 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
     
     def _run_loop(self, u, step, time_increment, frames, max_iters,
                   vtk_out, verbose, plot_bounds, colormap):
-        slice_idx = self.vf.Nz // 2
         self.converged = False
         self.iter = 0
 
@@ -179,7 +227,7 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
             if self.iter % self.check_freq == 0:
                 self.converged = self.check_convergence(diff, verbose)
 
-        self._handle_outputs(u, 0, time, slice_idx, vtk_out,
+        self._handle_outputs(u, 0, time, vtk_out,
                              verbose, plot_bounds, colormap)
         return u
     
@@ -199,3 +247,138 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
             print(f"Converged after {self.iter} iterations.")
 
         return converged
+
+@dataclass
+class MultiPhaseSolver(TimeDependentSolver):
+    """
+    Multiphase-specific solver wrapper.
+
+    Two modes:
+    (A) labels-mode (default):
+        from_labels=True and fieldnames="labels" (or ["labels"])
+        -> reads a labeled integer array, builds one-hot phase tensor (P, Nx, Ny, Nz),
+           runs the solver, and exports a single label field by argmax over phases.
+
+    (B) fields-mode:
+        fieldnames = ["phi0","phi1",...]
+        -> stacks them to u with shape (P, Nx, Ny, Nz) and exports back to the same fields.
+
+    Safety:
+        If P > max_phases, exits with a warning (dense arrays become RAM-critical).
+    """
+    from_labels: bool = True
+    output_label_fieldname: str | None = None
+    max_phases: int = 10
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.phase_labels = None   # numpy array of unique labels (labels-mode)
+        self.phase_count = None
+
+        # Determine phase count early for memory warning
+        if self.from_labels:
+            if len(self.fieldnames) != 1:
+                raise ValueError("labels-mode expects a single fieldname containing the labeled array.")
+            lab = self.vf.fields[self.fieldnames[0]]
+            uniq = np.unique(lab)
+            self.phase_labels = uniq
+            self.phase_count = int(uniq.size)
+        else:
+            self.phase_count = int(len(self.fieldnames))
+
+        if self.phase_count > self.max_phases:
+            self._warn_too_many_phases_and_exit(self.phase_count)
+
+    def _warn_too_many_phases_and_exit(self, P: int):
+        # Rough RAM estimate for dense float storage (ignores ghost nodes and overhead)
+        Nx, Ny, Nz = int(self.vf.Nx), int(self.vf.Ny), int(self.vf.Nz)
+        bytes_per = 8 if str(self.vf.precision).endswith("64") else 4
+        est_gb = P * Nx * Ny * Nz * bytes_per / (1024**3)
+        warnings.warn(
+            f"MultiPhaseTimeDependentSolver: P={P} phases detected (> {self.max_phases}). "
+            f"This dense multiphase approach is not suited for too many phases and becomes RAM critical. "
+            f"Rough field storage alone: ~{est_gb:.2f} GB (excluding ghost nodes/overhead). "
+            f"Aborting."
+        )
+        sys.exit(1)
+
+    def _init_fields(self):
+        if not self.from_labels:
+            # Use normal stacking behavior: each field is one phase channel
+            return super()._init_fields()
+
+        # labels-mode: build dense phase tensor
+        # NOTE: for large P this is RAM-heavy (guarded above).
+        label_field = self.fieldnames[0]
+        labels_np = self.vf.fields[label_field]
+
+        phis = (labels_np[None, ...] == self.phase_labels[:, None, None, None])
+        u_list = [self.vg.init_scalar_field(phis[p]) for p in range(self.phase_count)]
+        u = self.vg.concatenate(u_list, 0)
+        u = self.vg.bc.trim_boundary_nodes(u)
+        return u
+    
+    def _export_fields(self, u_out):
+        self.phiindex = self.vg.argmax(u_out, dim=0, keepdim=True)
+
+        if not self.from_labels:
+            return super()._export_fields(u_out)
+
+        labels_np = self.vg.export_scalar_field_to_numpy(self.phiindex)
+        out_name = self.output_label_fieldname or self.fieldnames[0]
+        self.vf.set_field(out_name, labels_np)
+
+    def phases_to_rgb(self, phis_slice):
+        """Map phase-fields to RGB image."""
+        P = phis_slice.shape[0]
+
+        # phase 0 = white; phases 1.. = distinct-ish colors (some are RGB mixes)
+        colors = np.array([
+            [1.0, 1.0, 1.0],  # 0 white
+            [1.0, 0.0, 0.0],  # 1 red
+            [0.0, 1.0, 0.0],  # 2 green
+            [0.0, 0.0, 1.0],  # 3 blue
+            [1.0, 1.0, 0.0],  # 4 yellow
+            [1.0, 0.0, 1.0],  # 5 magenta
+            [0.0, 1.0, 1.0],  # 6 cyan
+            [1.0, 0.5, 0.0],  # 7 orange
+            [0.5, 0.0, 1.0],  # 8 purple
+            [0.5, 1.0, 0.0],  # 9 lime
+            [0.0, 0.5, 1.0],  # 10 azure
+        ], dtype=np.float32)
+
+        # rgb_image = np.zeros((H, W, 4))  # Initialize an empty RGB image
+        rgb_image = np.tensordot(phis_slice, colors[:P], axes=(0, 0))
+        return np.clip(rgb_image, 0.0, 1.0)
+
+    def _plot_frame(self, phis, time, colormap, plot_bounds):
+        slice_idx = self.vf.Nz // 2
+        phi_label_slice = self.vg.to_numpy(self.phiindex[0, :, :, slice_idx])
+        phis_slice = self.vg.to_numpy(phis[:, :, :, slice_idx])
+        rgb_slice = self.phases_to_rgb(phis_slice)
+
+        if not hasattr(self, "_fig"):
+            self._fig, (self._ax0, self._ax1) = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
+            start1 = self.vf.origin[0] - self.vf.spacing[0] / 2
+            start2 = self.vf.origin[1] - self.vf.spacing[1] / 2
+            end1 = self.vf.domain_size[0] - start1
+            end2 = self.vf.domain_size[1] - start2
+            extent = [start1, end1, start2, end2]
+            self._im0 = self._ax0.imshow(phi_label_slice.T, cmap=colormap, origin='lower', extent=extent)
+            ratio = np.clip((end2 - start2) / (end1 - start1), 0, 1)
+            self._cbar = self._fig.colorbar(self._im0, ax=self._ax0, shrink=ratio)
+            self._ax0.set_title("Phase Labels")
+            self._ax0.set_xlabel("X")
+            self._ax0.set_ylabel("Y")
+
+            self._im1 = self._ax1.imshow(np.transpose(rgb_slice, (1, 0, 2)), origin='lower', extent=extent)
+            self._ax1.set_title("Phases in RGB")
+            self._ax1.set_xlabel("X")
+            self._ax1.set_ylabel("Y")
+        else:
+            self._im0.set_data(phi_label_slice.T)
+            self._im1.set_data(np.transpose(rgb_slice, (1, 0, 2)))
+
+        self._fig.suptitle(f"Slice {slice_idx} of phase-fields at time {time}")
+        self._fig.canvas.draw_idle()
+        self._fig.canvas.flush_events()
