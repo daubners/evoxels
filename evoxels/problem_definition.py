@@ -273,8 +273,8 @@ class PeriodicCahnHilliard(SemiLinearODE):
         :math:`\mu` the chemical potential, and :math:`\kappa` the gradient energy coefficient.
 
         Args:
-            c (array-like): Concentration field.
             t (float): Current time.
+            c (array-like): Concentration field.
 
         Returns:
             Backend array of the same shape as ``c`` containing ``dc/dt``.
@@ -369,8 +369,8 @@ class AllenCahnEquation(SemiLinearODE):
         ``curvature=`` in range :math:`[0,1]`.
 
         Args:
-            phi (array-like): order parameter.
             t (float): Current time.
+            phi (array-like): order parameter.
 
         Returns:
             Backend array of the same shape as ``\phi`` containing ``d\phi/dt``.
@@ -438,8 +438,8 @@ class CoupledReactionDiffusion(SemiLinearODE):
         - Species B with concentration c_B = u[1]
 
         Args:
-            u (array-like): species
             t (float): Current time.
+            u (array-like): species
 
         Returns:
             Backend array of the same shape as ``u`` containing ``du/dt``.
