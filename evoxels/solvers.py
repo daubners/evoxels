@@ -309,9 +309,7 @@ class MultiPhaseSolver(TimeDependentSolver):
 
         # labels-mode: build dense phase tensor
         # NOTE: for large P this is RAM-heavy (guarded above).
-        label_field = self.fieldnames[0]
-        labels_np = self.vf.fields[label_field]
-
+        labels_np = self.vf.fields[self.fieldnames[0]]
         phis = (labels_np[None, ...] == self.phase_labels[:, None, None, None])
         u_list = [self.vg.init_scalar_field(phis[p]) for p in range(self.phase_count)]
         u = self.vg.concatenate(u_list, 0)
