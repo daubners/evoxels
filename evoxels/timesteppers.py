@@ -212,103 +212,77 @@ class ExponentialEuler(TimeStepper):
 class RKC1(TimeStepper):
     """Runge-Kutta-Chebyshev Scheme of order 1.
     
-    TODO: add citation."""
+    Based on the publication
+    "Convergence properties of the Runge-Kutta-Chebyshev method" by
+    Verwer, Hundsdorfer, Sommeijer (1990), doi: 10.1007/BF01386405
+    """
     problem: ODE
     dt: float
     polygrad: int = 4
     damping: float = 0.05
 
     def __post_init__(self):
-        # TODO: check plus or minus in w_0
-        w_0 = 1 + (self.damping/(self.polygrad**2))
-    
-        # TODO: clean up and replace with
-        # w_0<1: T = np.cos(np.arange(0, polygrad+1)*np.arccos(w_0))
-        # w_0>1: T = np.cosh(np.arange(0, polygrad+1)*np.arccosh(w_0))
-        T_w_0 = np.zeros(self.polygrad+1)
-        T_w_0_diff = np.zeros(self.polygrad+1)
-        ind = np.zeros(self.polygrad+1)
-        for j in range(self.polygrad+1):
-            ind[j] = 1
-            T_w_0[j] = np.polynomial.chebyshev.Chebyshev(ind)(w_0)
-            T_w_0_diff[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(1)(w_0)
-            ind[j] = 0
-    
-        w_1 = T_w_0[-1]/T_w_0_diff[-1]
-        b = 1/T_w_0
-        # take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2
-        # (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
-        # fill up empty space with 0
-        # makes the indexing easier in the method itself
-        mu_hilf = 2 * (b[2:]/b[1:-1])
-        self.mu_tilde = np.zeros(self.polygrad+1)
-        self.mu_tilde[1] = w_1/w_0
-        self.mu_tilde[2:] = w_1 * mu_hilf
-        self.mu = np.zeros(self.polygrad+1)
-        self.mu[2:] = w_0 * mu_hilf
-        self.nu = np.zeros(self.polygrad+1)
-        self.nu[2:] = -(b[2:]/b[:self.polygrad-1])
-        self.c = np.zeros(self.polygrad+1)
-        self.c = w_1 * (T_w_0_diff/T_w_0)
-  
+        w0 = 1 + (self.damping/(self.polygrad**2))
+        s = np.arange(0, self.polygrad+1)
+        T_w0 = np.cosh(s*np.arccosh(w0))
+        dT_w0 = s*np.sinh(s*np.arccosh(w0))/np.sqrt(w0**2 - 1)
+        b = 1/T_w0
+
+        w1 = T_w0[-1]/dT_w0[-1]
+        self.mu0 = 2 * w0 * (b[2:]/b[1:-1])
+        self.mu1 = 2 * w1 * (b[2:]/b[1:-1])
+        self.mu11 = w1/w0
+        self.nu  = -(b[2:]/b[:-2])
+        self.c = w1 * (dT_w0/T_w0)[1:-1]
+
     @property
     def order(self) -> int:
         return 1
 
     def step(self, t: float, u: State) -> State:
         Y_prev = u
-        Y_curr = u + self.mu_tilde[1] * self.dt * self.problem.rhs(t, u)
-        for j in range(2, self.polygrad+1):
-            rhs = self.problem.rhs(t + self.c[j-1]*self.dt, Y_curr)
-            Y_new = (  self.mu[j] * Y_curr 
+        Y_curr = u + self.mu11 * self.dt * self.problem.rhs(t, u)
+        for j in range(self.polygrad-1):
+            rhs = self.problem.rhs(t + self.c[j]*self.dt, Y_curr)
+            Y_new = (  self.mu0[j] * Y_curr 
                      + self.nu[j] * Y_prev
-                     + ( 1 - self.mu[j] - self.nu[j] ) * u
-                     + self.mu_tilde[j] * self.dt * rhs)
+                     + (1 - self.mu0[j] - self.nu[j]) * u
+                     + self.mu1[j] * self.dt * rhs)
             Y_prev = Y_curr
             Y_curr = Y_new
         return Y_curr
 
 @dataclass
 class RKC2(TimeStepper):
-    """Runge-Kutta-Chebyshev Scheme of order 2."""
+    """Runge-Kutta-Chebyshev Scheme of order 2.
+    
+    Based on the publication
+    "Convergence properties of the Runge-Kutta-Chebyshev method" by
+    Verwer, Hundsdorfer, Sommeijer (1990), doi: 10.1007/BF01386405
+    """
     problem: ODE
     dt: float
     polygrad: int = 4
     damping: float = 2/13
 
     def __post_init__(self):
-        w_0 = 1 + (self.damping/self.polygrad**2)
-        T_w_0 = np.zeros(self.polygrad+1)
-        T_w_0_diff = np.zeros(self.polygrad+1)
-        T_w_0_diff2 = np.zeros(self.polygrad+1)
-        ind = np.zeros(self.polygrad+1)
-        for j in range(self.polygrad+1):
-            ind[j] = 1
-            T_w_0[j] = np.polynomial.chebyshev.Chebyshev(ind)(w_0)
-            T_w_0_diff[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(1)(w_0)
-            T_w_0_diff2[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(2)(w_0)
-            ind[j] = 0
-        w_1 = T_w_0_diff[-1]/T_w_0_diff2[-1]
-        b = np.zeros(self.polygrad+1)
-        b[2:] = T_w_0_diff2[2:]/(T_w_0_diff[2:]**2)
+        w0 = 1 + (self.damping/self.polygrad**2)
+        s = np.arange(0, self.polygrad+1)
+        T_w0 = np.cosh(s*np.arccosh(w0))
+        dT_w0 = s*np.sinh(s*np.arccosh(w0))/np.sqrt(w0**2 - 1)
+        d2T_w0 = (s*s * T_w0 - w0 * dT_w0) / (w0**2 - 1)
+        b = d2T_w0/dT_w0**2
         b[0] = b[2]
         b[1] = b[2]
-        #take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2 (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
-        #fill up empty space with 0
-        #makes the indexing easier in the method itself
-        mu_hilf = 2 * (b[2:]/b[1:-1])
-        self.mu_tilde = np.zeros(self.polygrad+1)
-        self.mu_tilde[1] = b[1]*w_1
-        self.mu_tilde[2:] = w_1 * mu_hilf
-        self.mu = np.zeros(self.polygrad+1)
-        self.mu[2:] = w_0 * mu_hilf
-        self.nu = np.zeros(self.polygrad+1)
-        self.nu[2:] = -(b[2:]/b[:-2])
-        self.gamma = np.zeros(self.polygrad+1)
-        self.gamma[2:] = -(1-b[1:-1]*T_w_0[1:-1])*self.mu_tilde[2:]
-        self.c = np.zeros(self.polygrad+1)
-        self.c[2:] = w_1 * (T_w_0_diff2[2:]/T_w_0_diff[2:])
-        self.c[1] = self.c[2]/T_w_0_diff[2]
+
+        w1 = dT_w0[-1]/d2T_w0[-1]
+        self.mu0 = 2 * w0 * (b[2:]/b[1:-1])
+        self.mu1 = 2 * w1 * (b[2:]/b[1:-1])
+        self.mu11 = b[1]*w1
+        self.nu  = -(b[2:]/b[:-2])
+        self.gamma = -(1-b[1:-1]*T_w0[1:-1])*self.mu1
+        self.c = w1 * (d2T_w0/dT_w0)[1:-1]
+        self.c[0] = self.c[1]/dT_w0[2]
 
     @property
     def order(self) -> int:
@@ -316,14 +290,15 @@ class RKC2(TimeStepper):
 
     def step(self, t: float, u: State) -> State:
         Y_prev = u
-        Y_curr = u + self.mu_tilde[1] * self.dt * self.problem.rhs(t, u)
-        for j in range(2, self.polygrad+1):
-            rhs = self.problem.rhs(t + self.c[j-1]*self.dt, Y_curr)
-            Y_new = (  self.mu[j] * Y_curr
+        rhs_0 = self.problem.rhs(t, u)
+        Y_curr = u + self.mu11 * self.dt * rhs_0
+        for j in range(self.polygrad-1):
+            rhs = self.problem.rhs(t + self.c[j]*self.dt, Y_curr)
+            Y_new = (  self.mu0[j] * Y_curr
                      + self.nu[j] * Y_prev
-                     + ( 1 - self.mu[j] - self.nu[j] ) * u
-                     + self.mu_tilde[j] * self.dt * rhs
-                     + self.gamma[j] * self.dt * self.problem.rhs(t, u))
+                     + ( 1 - self.mu0[j] - self.nu[j] ) * u
+                     + self.mu1[j] * self.dt * rhs
+                     + self.gamma[j] * self.dt * rhs_0)
             Y_prev = Y_curr
             Y_curr = Y_new
         return Y_curr
