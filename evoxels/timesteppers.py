@@ -212,7 +212,10 @@ class ExponentialEuler(TimeStepper):
 class RKC1(TimeStepper):
     """Runge-Kutta-Chebyshev Scheme of order 1.
     
-    TODO: add citation."""
+    Based on the publication
+    "Convergence properties of the Runge-Kutta-Chebyshev method" by
+    Verwer, Hundsdorfer, Sommeijer (1990), doi: 10.1007/BF01386405
+    """
     problem: ODE
     dt: float
     polygrad: int = 4
@@ -251,7 +254,12 @@ class RKC1(TimeStepper):
 
 @dataclass
 class RKC2(TimeStepper):
-    """Runge-Kutta-Chebyshev Scheme of order 2."""
+    """Runge-Kutta-Chebyshev Scheme of order 2.
+    
+    Based on the publication
+    "Convergence properties of the Runge-Kutta-Chebyshev method" by
+    Verwer, Hundsdorfer, Sommeijer (1990), doi: 10.1007/BF01386405
+    """
     problem: ODE
     dt: float
     polygrad: int = 4
