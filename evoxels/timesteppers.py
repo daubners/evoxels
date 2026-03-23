@@ -231,11 +231,11 @@ class RKC1(TimeStepper):
         self.mu11 = w1/w0
         self.nu  = -(b[2:]/b[:-2])
         self.c = w1 * (dT_w0/T_w0)[1:-1]
-  
+
     @property
     def order(self) -> int:
         return 1
-        
+
     def step(self, t: float, u: State) -> State:
         Y_prev = u
         Y_curr = u + self.mu11 * self.dt * self.problem.rhs(t, u)
@@ -275,7 +275,7 @@ class RKC2(TimeStepper):
         self.gamma = -(1-b[1:-1]*T_w0[1:-1])*self.mu1
         self.c = w1 * (d2T_w0/dT_w0)[1:-1]
         self.c[0] = self.c[1]/dT_w0[2]
-  
+
     @property
     def order(self) -> int:
         return 2
