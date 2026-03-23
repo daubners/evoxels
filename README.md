@@ -1,4 +1,8 @@
-[![Python package](https://github.com/daubners/evoxels/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/evoxels/actions/workflows/python-package.yml)
+[![PyPI version](https://badge.fury.io/py/evoxels.svg)](https://badge.fury.io/py/evoxels)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Build and run Tests](https://github.com/daubners/evoxels/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/daubners/evoxels/actions/workflows/python-package.yml)
+[![Documentation Status](https://readthedocs.org/projects/evoxels/badge/?version=latest)](https://evoxels.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.09733/status.svg)](https://doi.org/10.21105/joss.09733)
 
 # evoxels
 A differentiable physics framework for voxel-based microstructure simulations
