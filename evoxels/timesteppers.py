@@ -1,6 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import numpy as np
 from typing import Any
 from .problem_definition import ODE, SemiLinearODE
 
@@ -42,6 +43,7 @@ class ForwardEuler(TimeStepper):
     def step(self, t: float, u: State) -> State:
         return u + self.dt * self.problem.rhs(t, u)
 
+
 @dataclass
 class RungeKutta4(TimeStepper):
     """Classical explicit Runge-Kutta Scheme of order 4."""
@@ -58,6 +60,7 @@ class RungeKutta4(TimeStepper):
         k3 = self.problem.rhs(t + 0.5*self.dt, u + 0.5*self.dt*k2)
         k4 = self.problem.rhs(t + self.dt, u + self.dt*k3)
         return u + (self.dt/6) * (k1 + 2*k2 + 2*k3 + k4)
+
 
 @dataclass
 class PseudoSpectralIMEX(TimeStepper):
@@ -134,6 +137,7 @@ except ImportError:
     PseudoSpectralIMEX_dfx = None
     warnings.warn("Diffrax not found. 'PseudoSpectralIMEX_dfx' will not be available.")
 
+
 @dataclass
 class ExponentialEuler(TimeStepper):
     """First-order exponential Euler (ETD1) method for semilinear problems.
@@ -158,7 +162,6 @@ class ExponentialEuler(TimeStepper):
             self.pad = self.problem.vg.bc.pad_fft_zero_flux_periodic
 
     def phi1(self, z):
-        import numpy as np
         """Compute varphi_1(z) = (exp(z)-1)/(z)
         
         with special handling for small v to avoid loss of significance.
@@ -177,7 +180,7 @@ class ExponentialEuler(TimeStepper):
     def phiPade(self, z, Q, Ncoeff, Dcoeff):
         """Evaluate (Q,Q)-Padé approximation of phi-function
         
-        This routine evaluates the the exponential-integrator
+        This routine evaluates the exponential-integrator
         varphi_1(z) = (exp(z)-1)/z as the rational approximation
 
             varphi_1(z) ≈ P_Q(z) / R_Q(z),
@@ -207,7 +210,9 @@ class ExponentialEuler(TimeStepper):
 
 @dataclass
 class RKC1(TimeStepper):
-    """Runge-Kutta-Chebyshev Scheme of order 1."""
+    """Runge-Kutta-Chebyshev Scheme of order 1.
+    
+    TODO: add citation."""
     problem: ODE
     dt: float
     polygrad: int = 4
@@ -216,10 +221,10 @@ class RKC1(TimeStepper):
     def __post_init__(self):
         # TODO: check plus or minus in w_0
         w_0 = 1 + (self.damping/(self.polygrad**2))
-        
-        # Evt ersetzen mit
-        # T = np.cos(np.arange(0, polygrad+1)*np.arccos(w_0))
-        # T2 = np.cosh(np.arange(0, polygrad+1)*np.arccosh(w_0))
+    
+        # TODO: clean up and replace with
+        # w_0<1: T = np.cos(np.arange(0, polygrad+1)*np.arccos(w_0))
+        # w_0>1: T = np.cosh(np.arange(0, polygrad+1)*np.arccosh(w_0))
         T_w_0 = np.zeros(self.polygrad+1)
         T_w_0_diff = np.zeros(self.polygrad+1)
         ind = np.zeros(self.polygrad+1)
@@ -228,12 +233,13 @@ class RKC1(TimeStepper):
             T_w_0[j] = np.polynomial.chebyshev.Chebyshev(ind)(w_0)
             T_w_0_diff[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(1)(w_0)
             ind[j] = 0
-        
+    
         w_1 = T_w_0[-1]/T_w_0_diff[-1]
         b = 1/T_w_0
-        #take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2 (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
-        #fill up empty space with 0
-        #makes the indexing easier in the method itself
+        # take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2
+        # (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
+        # fill up empty space with 0
+        # makes the indexing easier in the method itself
         mu_hilf = 2 * (b[2:]/b[1:-1])
         self.mu_tilde = np.zeros(self.polygrad+1)
         self.mu_tilde[1] = w_1/w_0
@@ -248,7 +254,7 @@ class RKC1(TimeStepper):
     @property
     def order(self) -> int:
         return 1
-        
+
     def step(self, t: float, u: State) -> State:
         Y_prev = u
         Y_curr = u + self.mu_tilde[1] * self.dt * self.problem.rhs(t, u)
@@ -303,7 +309,7 @@ class RKC2(TimeStepper):
         self.c = np.zeros(self.polygrad+1)
         self.c[2:] = w_1 * (T_w_0_diff2[2:]/T_w_0_diff[2:])
         self.c[1] = self.c[2]/T_w_0_diff[2]
-  
+
     @property
     def order(self) -> int:
         return 2
