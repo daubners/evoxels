@@ -271,7 +271,7 @@ class RKC1(TimeStepper):
 @dataclass
 class RKC2(TimeStepper):
     """Runge-Kutta-Chebyshev Scheme of order 2."""
-    problem: ReactionDiffusionSBM
+    problem: ODE
     dt: float
     polygrad: int = 4
     damping: float = 2/13
