@@ -42,6 +42,22 @@ class ForwardEuler(TimeStepper):
     def step(self, t: float, u: State) -> State:
         return u + self.dt * self.problem.rhs(t, u)
 
+@dataclass
+class RungeKutta4(TimeStepper):
+    """Classical explicit Runge-Kutta Scheme of order 4."""
+    problem: ODE
+    dt: float
+
+    @property
+    def order(self) -> int:
+        return 4
+
+    def step(self, t: float, u: State) -> State:
+        k1 = self.problem.rhs(t, u)
+        k2 = self.problem.rhs(t + 0.5*self.dt, u + 0.5*self.dt*k1)
+        k3 = self.problem.rhs(t + 0.5*self.dt, u + 0.5*self.dt*k2)
+        k4 = self.problem.rhs(t + self.dt, u + self.dt*k3)
+        return u + (self.dt/6) * (k1 + 2*k2 + 2*k3 + k4)
 
 @dataclass
 class PseudoSpectralIMEX(TimeStepper):
@@ -117,3 +133,191 @@ try:
 except ImportError:
     PseudoSpectralIMEX_dfx = None
     warnings.warn("Diffrax not found. 'PseudoSpectralIMEX_dfx' will not be available.")
+
+@dataclass
+class ExponentialEuler(TimeStepper):
+    """First-order exponential Euler (ETD1) method for semilinear problems.
+
+    Implementation of the exponential time differencing method of order 1 (ETD1)
+    described in Hochbruck, Lubich, Selhofer (1998), doi:10.1137/S1064827595295337
+    Update:
+        u_{n+1} = u_n + dt * varphi_1(dt L) * rhs(u_n)
+    where
+        varphi_1(z) = (exp(z) - 1) / z.
+    """
+    problem: SemiLinearODE
+    dt: float
+
+    def __post_init__(self):
+        self.phi_1_k_squared = self.phi1(self.dt*self.problem.fourier_symbol)
+        if self.problem.bc_type == 'periodic':
+            self.pad = self.problem.vg.bc.pad_fft_periodic
+        elif self.problem.bc_type == 'dirichlet':
+            self.pad = self.problem.vg.bc.pad_fft_dirichlet_periodic
+        elif self.problem.bc_type == 'neumann':
+            self.pad = self.problem.vg.bc.pad_fft_zero_flux_periodic
+
+    def phi1(self, z):
+        import numpy as np
+        """Compute varphi_1(z) = (exp(z)-1)/(z)
+        
+        with special handling for small v to avoid loss of significance.
+        Coefficients for the degree-6 Padé approximation are taken from
+        Hochbruck, Lubich, Selhofer (1998), doi:10.1137/S1064827595295337
+        """
+        Q = 6
+        N = [1, 1/26,  5/156,  1/858, 1/5720,  1/205920, 1/8648640]
+        D = [1, -6/13, 5/52,  -5/429, 1/1144, -1/25740,  1/1235520]
+        
+        phi = (self.problem.vg.lib.exp(z) - 1) / z
+        indx = (self.problem.vg.lib.abs(z) < 0.5)
+        phi = self.problem.vg.set(phi, indx, self.phiPade(z[indx], Q, N, D))
+        return phi
+
+    def phiPade(self, z, Q, Ncoeff, Dcoeff):
+        """Evaluate (Q,Q)-Padé approximation of phi-function
+        
+        This routine evaluates the the exponential-integrator
+        varphi_1(z) = (exp(z)-1)/z as the rational approximation
+
+            varphi_1(z) ≈ P_Q(z) / R_Q(z),
+
+        where P_Q and R_Q are degree-Q polynomials with coefficients
+        given by `Ncoeff` and `Dcoeff`, respectively. It is used for
+        arguments `z` near zero, where the direct formula suffers
+        from loss of significance due to cancellation.
+        """
+        numerator = Ncoeff[Q]
+        denominator = Dcoeff[Q]
+        for k in range(Q - 1, -1, -1):
+            numerator = numerator * z + Ncoeff[k]
+            denominator = denominator * z + Dcoeff[k]
+        return numerator / denominator
+
+    @property
+    def order(self) -> int:
+        return 1
+
+    def step(self, t: float, u: State) -> State:
+        dc = self.pad(self.problem.rhs(t, u))
+        dc_fft = self.dt * self.phi_1_k_squared * self.problem.vg.rfftn(dc, dc.shape)
+        update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
+        return u + update
+
+
+@dataclass
+class RKC1(TimeStepper):
+    """Runge-Kutta-Chebyshev Scheme of order 1."""
+    problem: ODE
+    dt: float
+    polygrad: int = 4
+    damping: float = 0.05
+
+    def __post_init__(self):
+        # TODO: check plus or minus in w_0
+        w_0 = 1 + (self.damping/(self.polygrad**2))
+        
+        # Evt ersetzen mit
+        # T = np.cos(np.arange(0, polygrad+1)*np.arccos(w_0))
+        # T2 = np.cosh(np.arange(0, polygrad+1)*np.arccosh(w_0))
+        T_w_0 = np.zeros(self.polygrad+1)
+        T_w_0_diff = np.zeros(self.polygrad+1)
+        ind = np.zeros(self.polygrad+1)
+        for j in range(self.polygrad+1):
+            ind[j] = 1
+            T_w_0[j] = np.polynomial.chebyshev.Chebyshev(ind)(w_0)
+            T_w_0_diff[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(1)(w_0)
+            ind[j] = 0
+        
+        w_1 = T_w_0[-1]/T_w_0_diff[-1]
+        b = 1/T_w_0
+        #take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2 (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
+        #fill up empty space with 0
+        #makes the indexing easier in the method itself
+        mu_hilf = 2 * (b[2:]/b[1:-1])
+        self.mu_tilde = np.zeros(self.polygrad+1)
+        self.mu_tilde[1] = w_1/w_0
+        self.mu_tilde[2:] = w_1 * mu_hilf
+        self.mu = np.zeros(self.polygrad+1)
+        self.mu[2:] = w_0 * mu_hilf
+        self.nu = np.zeros(self.polygrad+1)
+        self.nu[2:] = -(b[2:]/b[:self.polygrad-1])
+        self.c = np.zeros(self.polygrad+1)
+        self.c = w_1 * (T_w_0_diff/T_w_0)
+  
+    @property
+    def order(self) -> int:
+        return 1
+        
+    def step(self, t: float, u: State) -> State:
+        Y_prev = u
+        Y_curr = u + self.mu_tilde[1] * self.dt * self.problem.rhs(t, u)
+        for j in range(2, self.polygrad+1):
+            rhs = self.problem.rhs(t + self.c[j-1]*self.dt, Y_curr)
+            Y_new = (  self.mu[j] * Y_curr 
+                     + self.nu[j] * Y_prev
+                     + ( 1 - self.mu[j] - self.nu[j] ) * u
+                     + self.mu_tilde[j] * self.dt * rhs)
+            Y_prev = Y_curr
+            Y_curr = Y_new
+        return Y_curr
+
+@dataclass
+class RKC2(TimeStepper):
+    """Runge-Kutta-Chebyshev Scheme of order 2."""
+    problem: ReactionDiffusionSBM
+    dt: float
+    polygrad: int = 4
+    damping: float = 2/13
+
+    def __post_init__(self):
+        w_0 = 1 + (self.damping/self.polygrad**2)
+        T_w_0 = np.zeros(self.polygrad+1)
+        T_w_0_diff = np.zeros(self.polygrad+1)
+        T_w_0_diff2 = np.zeros(self.polygrad+1)
+        ind = np.zeros(self.polygrad+1)
+        for j in range(self.polygrad+1):
+            ind[j] = 1
+            T_w_0[j] = np.polynomial.chebyshev.Chebyshev(ind)(w_0)
+            T_w_0_diff[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(1)(w_0)
+            T_w_0_diff2[j] = np.polynomial.chebyshev.Chebyshev(ind).deriv(2)(w_0)
+            ind[j] = 0
+        w_1 = T_w_0_diff[-1]/T_w_0_diff2[-1]
+        b = np.zeros(self.polygrad+1)
+        b[2:] = T_w_0_diff2[2:]/(T_w_0_diff[2:]**2)
+        b[0] = b[2]
+        b[1] = b[2]
+        #take arrays of lenght s+1 even if most of the coefficients start with index 1 or 2 (mu_2 to mu_s, mu_tilde_1 to mu_tilde_s, nu_2 to nu_s, gamma_2 to gamma_s)
+        #fill up empty space with 0
+        #makes the indexing easier in the method itself
+        mu_hilf = 2 * (b[2:]/b[1:-1])
+        self.mu_tilde = np.zeros(self.polygrad+1)
+        self.mu_tilde[1] = b[1]*w_1
+        self.mu_tilde[2:] = w_1 * mu_hilf
+        self.mu = np.zeros(self.polygrad+1)
+        self.mu[2:] = w_0 * mu_hilf
+        self.nu = np.zeros(self.polygrad+1)
+        self.nu[2:] = -(b[2:]/b[:-2])
+        self.gamma = np.zeros(self.polygrad+1)
+        self.gamma[2:] = -(1-b[1:-1]*T_w_0[1:-1])*self.mu_tilde[2:]
+        self.c = np.zeros(self.polygrad+1)
+        self.c[2:] = w_1 * (T_w_0_diff2[2:]/T_w_0_diff[2:])
+        self.c[1] = self.c[2]/T_w_0_diff[2]
+  
+    @property
+    def order(self) -> int:
+        return 2
+
+    def step(self, t: float, u: State) -> State:
+        Y_prev = u
+        Y_curr = u + self.mu_tilde[1] * self.dt * self.problem.rhs(t, u)
+        for j in range(2, self.polygrad+1):
+            rhs = self.problem.rhs(t + self.c[j-1]*self.dt, Y_curr)
+            Y_new = (  self.mu[j] * Y_curr
+                     + self.nu[j] * Y_prev
+                     + ( 1 - self.mu[j] - self.nu[j] ) * u
+                     + self.mu_tilde[j] * self.dt * rhs
+                     + self.gamma[j] * self.dt * self.problem.rhs(t, u))
+            Y_prev = Y_curr
+            Y_curr = Y_new
+        return Y_curr
