@@ -22,7 +22,7 @@ def test_periodic_laplace_torch():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'periodic'},
+                          'bc': ('periodic', 'periodic', 'periodic')},
         test_function  = test_fun1,
         convention     = 'cell_center',
         dtype          = 'float32',
@@ -35,7 +35,7 @@ def test_periodic_laplace_jax():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'periodic'},
+                          'bc': ('periodic', 'periodic', 'periodic')},
         test_function  = test_fun1,
         convention     = 'cell_center',
         dtype          = 'float32',
@@ -51,7 +51,7 @@ def test_laplace_zero_dirichlet():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'dirichlet', 'bcs': (0,0)},
+                          'bc': (('dirichlet', (0, 0)), 'periodic', 'periodic')},
         test_function  = test_fun2,
         convention     = 'staggered_x',
         dtype          = 'float32',
@@ -67,7 +67,7 @@ def test_laplace_nonzero_dirichlet():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'dirichlet', 'bcs': (1,-1)},
+                          'bc': (('dirichlet', (1, -1)), 'periodic', 'periodic')},
         test_function  = test_fun3,
         convention     = 'staggered_x',
         dtype          = 'float32',
@@ -85,7 +85,7 @@ def test_laplace_zero_flux_cell_center():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'neumann'},
+                          'bc': ('neumann', 'periodic', 'periodic')},
         test_function  = test_fun3,
         convention     = 'cell_center',
         dtype          = 'float32',
@@ -97,7 +97,7 @@ def test_laplace_zero_flux_staggered():
     _ ,_ , slope, order = rhs_convergence_test(
         ODE_class      = ReactionDiffusion,
         problem_kwargs = {'D': 1.0, 'f': forcing, \
-                          'BC_type': 'neumann'},
+                          'bc': ('neumann', 'periodic', 'periodic')},
         test_function  = test_fun3,
         convention     = 'staggered_x',
         dtype          = 'float32',

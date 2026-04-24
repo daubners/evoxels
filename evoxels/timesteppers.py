@@ -76,12 +76,8 @@ class PseudoSpectralIMEX(TimeStepper):
     def __post_init__(self):
         # Pre‐bake the linear prefactor in Fourier
         self._fft_prefac = self.dt / (1 - self.dt*self.problem.fourier_symbol)
-        if self.problem.bc_type == 'periodic':
-            self.pad = self.problem.vg.bc.pad_fft_periodic
-        elif self.problem.bc_type == 'dirichlet':
-            self.pad = self.problem.vg.bc.pad_fft_dirichlet_periodic
-        elif self.problem.bc_type == 'neumann':
-            self.pad = self.problem.vg.bc.pad_fft_zero_flux_periodic
+        self.problem.verify_fft_bc_config()
+        self.pad = self.problem.pad_fft_bc
 
     @property
     def order(self) -> int:
@@ -154,12 +150,8 @@ class ExponentialEuler(TimeStepper):
 
     def __post_init__(self):
         self.phi_1_k_squared = self.phi1(self.dt*self.problem.fourier_symbol)
-        if self.problem.bc_type == 'periodic':
-            self.pad = self.problem.vg.bc.pad_fft_periodic
-        elif self.problem.bc_type == 'dirichlet':
-            self.pad = self.problem.vg.bc.pad_fft_dirichlet_periodic
-        elif self.problem.bc_type == 'neumann':
-            self.pad = self.problem.vg.bc.pad_fft_zero_flux_periodic
+        self.problem.verify_fft_bc_config()
+        self.pad = self.problem.pad_fft_bc
 
     def phi1(self, z):
         """Compute varphi_1(z) = (exp(z)-1)/(z)
@@ -222,10 +214,10 @@ class RKC1(TimeStepper):
     damping: float = 0.05
 
     def __post_init__(self):
-        w0 = 1 + (self.damping/(self.polygrad**2))
-        s = np.arange(0, self.polygrad+1)
-        T_w0 = np.cosh(s*np.arccosh(w0))
-        dT_w0 = s*np.sinh(s*np.arccosh(w0))/np.sqrt(w0**2 - 1)
+        w0 = self.problem.vg.to_backend(1 + (self.damping/(self.polygrad**2)))
+        s = self.problem.vg.arange(0, self.polygrad+1)
+        T_w0 = self.problem.vg.lib.cosh(s*self.problem.vg.lib.arccosh(w0))
+        dT_w0 = s*self.problem.vg.lib.sinh(s*self.problem.vg.lib.arccosh(w0))/self.problem.vg.lib.sqrt(w0**2 - 1)
         b = 1/T_w0
 
         w1 = T_w0[-1]/dT_w0[-1]
@@ -266,10 +258,10 @@ class RKC2(TimeStepper):
     damping: float = 2/13
 
     def __post_init__(self):
-        w0 = 1 + (self.damping/self.polygrad**2)
-        s = np.arange(0, self.polygrad+1)
-        T_w0 = np.cosh(s*np.arccosh(w0))
-        dT_w0 = s*np.sinh(s*np.arccosh(w0))/np.sqrt(w0**2 - 1)
+        w0 = self.problem.vg.to_backend(1 + (self.damping/self.polygrad**2))
+        s = self.problem.vg.arange(0, self.polygrad+1)
+        T_w0 = self.problem.vg.lib.cosh(s*self.problem.vg.lib.arccosh(w0))
+        dT_w0 = s*self.problem.vg.lib.sinh(s*self.problem.vg.lib.arccosh(w0))/self.problem.vg.lib.sqrt(w0**2 - 1)
         d2T_w0 = (s*s * T_w0 - w0 * dT_w0) / (w0**2 - 1)
         b = d2T_w0/dT_w0**2
         b[0] = b[2]

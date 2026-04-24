@@ -113,7 +113,7 @@ class VoxelGrid(FDStencils):
         kx, ky, kz = self.lib.meshgrid(a_x, a_y, a_z, indexing='ij')
         return kx**2 + ky**2 + kz**2
     
-    def fft_k_squared_nonperiodic(self):
+    def rfft_k_squared_nonperiodic(self):
         if self.convention == 'cell_center':
             a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0], d=self.spacing[0])
         else:   
