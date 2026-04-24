@@ -4,7 +4,7 @@ import importlib.util
 import numpy as np
 import pytest
 import evoxels as evo
-from evoxels.problem_definition import AllenCahnEquation, ReactionDiffusion
+from evoxels.problem_definition import TwoPhaseAllenCahn, ReactionDiffusion
 from evoxels.solvers import TimeDependentSolver
 from evoxels.timesteppers import ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch
@@ -101,7 +101,7 @@ def test_reaction_diffusion_normalizes_bc():
 def test_exponential_euler_rejects_full_neumann_semilinear_problem():
     vf = evo.VoxelFields((4, 4, 4))
     vg = VoxelGridTorch(vf.grid_info(), device="cpu")
-    problem = AllenCahnEquation(vg)
+    problem = TwoPhaseAllenCahn(vg)
 
     with pytest.raises(ValueError, match="periodic boundary conditions in y and z"):
         ExponentialEuler(problem, 0.1)

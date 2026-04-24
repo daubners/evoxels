@@ -3,7 +3,7 @@
 import sympy as sp
 import sympy.vector as spv
 from evoxels.problem_definition import PeriodicCahnHilliard, \
-    AllenCahnEquation, CoupledReactionDiffusion, ReactionDiffusionSBM
+    TwoPhaseAllenCahn, CoupledReactionDiffusion, ReactionDiffusionSBM
 from evoxels.utils import rhs_convergence_test
 
 CS = spv.CoordSys3D('CS')
@@ -27,7 +27,7 @@ test_fun_ac = 0.5 + 0.3 * sp.cos(4*sp.pi*CS.x)\
 
 def test_Allen_Cahn_rhs():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = AllenCahnEquation,
+        ODE_class      = TwoPhaseAllenCahn,
         problem_kwargs = {'eps': 3.0, 'curvature': 0.5, 'force': 1},
         test_function  = test_fun_ac,
         convention     = 'cell_center',

@@ -1,4 +1,4 @@
-from ..problem_definition import AllenCahnEquation
+from ..problem_definition import TwoPhaseAllenCahn
 from ..solvers import TimeDependentSolver
 from ..timesteppers import RungeKutta4
 from typing import Callable
@@ -29,7 +29,7 @@ def run_allen_cahn_solver(
         voxelfields,
         fieldnames,
         backend,
-        problem_cls = AllenCahnEquation,
+        problem_cls = TwoPhaseAllenCahn,
         timestepper_cls = RungeKutta4,
         device=device,
     )
