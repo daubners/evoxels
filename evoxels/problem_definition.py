@@ -364,7 +364,7 @@ class PeriodicCahnHilliard(SemiLinearODE):
 
 
 @dataclass
-class AllenCahnEquation(SemiLinearODE):
+class TwoPhaseAllenCahn(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 2.0
     gab: float = 1.0
@@ -406,9 +406,9 @@ class AllenCahnEquation(SemiLinearODE):
         unit_normal = grad / norm_grad
         curv = norm_grad * spv.divergence(unit_normal)
         n_laplace = laplace - (1-self.curvature)*curv
-        df_dphi = self.gab * (2*n_laplace - self._eval_potential(phi, sp)/self.eps) \
+        df_dphi = self.gab * (n_laplace - self._eval_potential(phi, sp)/(2*self.eps)) \
                   + 3/self.eps * phi * (1-phi) * self.force
-        return self.M / 2 * df_dphi
+        return self.M * df_dphi
 
     def rhs(self, t, phi):
         r"""Two-phase Allen-Cahn equation
@@ -434,10 +434,136 @@ class AllenCahnEquation(SemiLinearODE):
         phi_pad = self.pad_bc(phi)
         laplace = self.curvature*self.vg.laplace(phi_pad)
         n_laplace = (1-self.curvature) * self.vg.normal_laplace(phi_pad)
-        df_dphi = self.gab * (2.0 * (laplace+n_laplace) - potential/self.eps)\
+        df_dphi = self.gab * (laplace + n_laplace - potential/2/self.eps)\
                   + 3/self.eps * phi * (1-phi) * self.force
-        return self.M / 2 * df_dphi
+        return self.M * df_dphi
 
+
+@dataclass
+class MultiPhaseAllenCahn(SemiLinearODE):
+    vg: VoxelGrid
+    eps: float = 3.0
+    gab: float = 1.0
+    M: float = 1.0
+    force: float = 0.0
+    curvature: float = 1.0
+    potential: str = 'well'
+    fast: bool = True
+    bc: tuple = ('periodic','periodic','periodic')
+    _fourier_symbol: Any = field(init=False, repr=False)
+
+    def __post_init__(self):
+        """Precompute factors required by the spectral solver."""
+        self.initialize_boundary_conditions()
+        self._fourier_symbol = -self.M * self.gab * self.k_squared()
+        if self.potential == 'well':
+            self.pot_factor = 9 / (2*self.eps**2)
+            self.calc_potential_derivatives = self._calc_well_derivatives
+        # elif self.potential == 'obstacle':
+        #     self.pot_factor = 16 / (self.eps**2 * self.vg.lib.pi**2)
+        #     self.calc_potential_derivatives = self._calc_obstacle_derivatives
+        else:
+            raise ValueError(f"Unknown potential type: {self.potential}")
+
+        if self.fast:
+            self.project_to_simplex = self._sloppy_simplex_projection
+        else:
+            self.project_to_simplex = self._euclidean_simplex_projection
+    
+    @property
+    def order(self):
+        return 2
+
+    @property
+    def fourier_symbol(self):
+        return self._fourier_symbol
+
+    def rhs_analytic(self, t, phis):
+        sum_phi_squared = sum(phi**2 for phi in phis)
+        df_dphi = []
+
+        for phi in phis:
+            grad = spv.gradient(phi)
+            laplace = spv.laplacian(phi)
+            norm_grad = sp.sqrt(grad.dot(grad))
+            unit_normal = grad / norm_grad
+            curv = norm_grad * spv.divergence(unit_normal)
+
+            grad_term = -self.curvature * laplace - (1 - self.curvature) * (laplace - curv)
+            pot_term = self.pot_factor * (3*phi*(sum_phi_squared - phi**2) + phi**3 - phi)
+            df_dphi.append(grad_term + pot_term)
+
+        mean_df = sum(df_dphi) / len(df_dphi)
+        return tuple(-self.M * self.gab * (df - mean_df) for df in df_dphi)
+    
+    def _sloppy_simplex_projection(self, phis):
+        # hard Gibbs simplex projection: phi>=0 and sum_p phi_p = 1
+        phis = self.vg.lib.clip(phis, min=0.0)
+        sum = self.vg.sum(phis, dim=0, keepdim=True)
+        return phis / sum
+
+    def _euclidean_simplex_projection(self, phis):
+        """Euclidean projection onto {phi>=0, sum_p phi=1} per voxel."""
+        N = phis.shape[0]
+        u = self.vg.sort(phis, dim=0, descending=True)
+        cssv = self.vg.cumsum(u, dim=0) - 1.0
+
+        k = self.vg.arange(1, N+1).reshape(N, 1, 1, 1)
+        cond = (u - cssv / k) > 0
+
+        N_active = self.vg.sum(cond, dim=0, keepdim=False)
+        N_active = self.vg.lib.clip(N_active, min=1)
+
+        idx = (N_active - 1)[None, ...]
+        theta_num = self.vg.take_along_dim(cssv, idx, dim=0)
+        theta = theta_num / N_active[None, ...]
+
+        return self.vg.lib.clip(phis - theta, min=0.0)
+    
+    def _calc_well_derivatives(self, phis):
+        sum_phi_squared = self.vg.sum(phis**2, dim=0, keepdim=True)
+        df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
+        return self.pot_factor*df_dphi
+
+    def _calc_obstacle_derivatives(self, phis):
+        # sum_phi = self.vg.sum(phis, dim=0, keepdim=True)
+        return -self.pot_factor * phis
+
+    def rhs(self, t, phis):
+        r"""Multi-phase Allen-Cahn equation
+        
+        Microstructural evolution of the phase fractions :math:`\phi_\alpha`,
+        :math:`\alpha=1,\ldots,N`, governed by the multiphase-field model.
+        :math:`M` denotes the mobility which is the same for all phase-pairs,
+        :math:`\epsilon` controls the diffuse interface width,
+        :math:`\gamma` denotes the interfacial energy.
+        The laplacian leads to a phase evolution driven by
+        curvature minimization which can be controlled by setting
+        ``curvature=`` in range :math:`[0,1]`.
+
+        Args:
+            t (float): Current time.
+            phis (array-like): phase fractions.
+
+        Returns:
+            Backend array of the same shape as ``\phi`` containing ``d\phi/dt``.
+        """
+        phis = self.project_to_simplex(phis)
+
+        # Gradient term
+        phi_pad = self.pad_bc(phis)
+        dfgrad_dphi = -self.curvature*self.vg.laplace(phi_pad)
+        dfgrad_dphi -= (1-self.curvature) * self.vg.normal_laplace(phi_pad)
+        # This one cancels because of pairwise interactions
+        # sum_dfgrad_dphi = self.vg.sum(dfgrad_dphi, dim=0, keepdim=True)
+        # dfgrad_dphi += sum_dfgrad_dphi
+
+        # Potential term
+        dfpot_dphi = self.calc_potential_derivatives(phis)
+    
+        df_dphi = dfgrad_dphi + dfpot_dphi
+        return - self.M * self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
+    
 
 @dataclass
 class CoupledReactionDiffusion(SemiLinearODE):

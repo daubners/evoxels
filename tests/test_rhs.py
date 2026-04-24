@@ -3,7 +3,8 @@
 import sympy as sp
 import sympy.vector as spv
 from evoxels.problem_definition import PeriodicCahnHilliard, \
-    TwoPhaseAllenCahn, CoupledReactionDiffusion, ReactionDiffusionSBM
+    TwoPhaseAllenCahn, CoupledReactionDiffusion, ReactionDiffusionSBM, \
+    MultiPhaseAllenCahn
 from evoxels.utils import rhs_convergence_test
 
 CS = spv.CoordSys3D('CS')
@@ -49,6 +50,30 @@ def test_coupled_reaction_diffusion_rhs():
     )
     assert all(abs(s - order) < 0.1 for s in slopes),\
         f"expected order {order}, got {slopes[0]:.2f} and {slopes[1]:.2f}"
+
+
+test_funs_mpac = (
+    1/3 + 1/20 * sp.sin(2 * sp.pi * CS.z) + 1/10 * sp.cos(2 * sp.pi * CS.x),
+    1/3 + 1/10 * sp.sin(2 * sp.pi * CS.y) - 1/10 * sp.cos(2 * sp.pi * CS.x),
+    1/3 - 1/20 * sp.sin(2 * sp.pi * CS.z) - 1/10 * sp.sin(2 * sp.pi * CS.y)
+)
+
+def test_multiphase_allen_cahn_rhs():
+    _, _, slopes, order = rhs_convergence_test(
+        ODE_class      = MultiPhaseAllenCahn,
+        problem_kwargs = {
+            "eps": 3.0,
+            "gab": 1.0,
+            "M": 1.0,
+            "curvature": 1.0,
+            "bc": ('neumann', 'periodic', 'periodic'),
+        },
+        test_function  = test_funs_mpac,
+        convention     = 'cell_center',
+        dtype          = 'float64'
+    )
+    assert all(abs(s - order) < 0.1 for s in slopes),\
+        f"expected order {order}, got {slopes[0]:.2f}, {slopes[1]:.2f}, {slopes[2]:.2f}"
     
 
 test_fun_sbm = CS.x + (CS.x*(1-CS.x))
