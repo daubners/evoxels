@@ -35,8 +35,8 @@ def test_1D_analytical_tanh_profile():
     vf = evo.VoxelFields((Nx, 1, 1), domain_size=(Nx, 1, 1))
     phi = np.zeros((Nx, 1, 1), dtype=np.float32)
     phi[: Nx // 2] = 1.0
-    vf.add_field("phi1", phi)
-    vf.add_field("phi2", phi)
+    vf.add_field("phi1", phi.copy())
+    vf.add_field("phi2", phi.copy())
 
     eps = 3.0
     evo.run_allen_cahn_solver(
@@ -45,8 +45,8 @@ def test_1D_analytical_tanh_profile():
         backend="torch",
         device="cpu",
         frames=1,
-        max_iters=13,
-        time_increment=0.1,
+        max_iters=10,
+        time_increment=0.5,
         eps=eps,
         jit=False,
         verbose=False,
@@ -57,8 +57,8 @@ def test_1D_analytical_tanh_profile():
         "phi2",
         backend="jax",
         frames=1,
-        max_iters=30,
-        time_increment=1,
+        max_iters=10,
+        time_increment=0.5,
         eps=eps,
         jit=True,
         verbose=False,

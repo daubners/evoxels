@@ -1,6 +1,6 @@
 from ..problem_definition import AllenCahnEquation
 from ..solvers import TimeDependentSolver
-from ..timesteppers import ForwardEuler
+from ..timesteppers import RungeKutta4
 from typing import Callable
 
 def run_allen_cahn_solver(
@@ -9,7 +9,7 @@ def run_allen_cahn_solver(
     backend: str,
     jit: bool = True,
     device: str = "cuda",
-    time_increment: float = 0.1,
+    time_increment: float = 0.5,
     frames: int = 10,
     max_iters: int = 100,
     eps: float = 2.0,
@@ -23,14 +23,14 @@ def run_allen_cahn_solver(
     plot_bounds = None,
 ):
     """
-    Solves time-dependent Allen-Cahn problem with ForwardEuler timestepper.
+    Solves time-dependent Allen-Cahn problem with RungeKutta4 timestepper.
     """
     solver = TimeDependentSolver(
         voxelfields,
         fieldnames,
         backend,
         problem_cls = AllenCahnEquation,
-        timestepper_cls = ForwardEuler,
+        timestepper_cls = RungeKutta4,
         device=device,
     )
     solver.solve(
