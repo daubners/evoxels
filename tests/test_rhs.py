@@ -2,7 +2,7 @@
 
 import sympy as sp
 import sympy.vector as spv
-from evoxels.problem_definition import PeriodicCahnHilliard, \
+from evoxels.problem_definition import CahnHilliard, \
     TwoPhaseAllenCahn, CoupledReactionDiffusion, ReactionDiffusionSBM, \
     MultiPhaseAllenCahn
 from evoxels.utils import rhs_convergence_test
@@ -12,7 +12,7 @@ test_fun_ch = 0.4 + 0.1 * sp.sin(2*sp.pi*CS.x)
 
 def test_Cahn_Hilliard_rhs():
     _ ,_ , slope, order = rhs_convergence_test(
-        ODE_class      = PeriodicCahnHilliard,
+        ODE_class      = CahnHilliard,
         problem_kwargs = {'eps': 3.0, 'D': 1.0, 'A': 0.25},
         test_function  = test_fun_ch,
         convention     = 'cell_center',

@@ -281,12 +281,13 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
 
 
 @dataclass
-class PeriodicCahnHilliard(SemiLinearODE):
+class CahnHilliard(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 3.0
     D: float = 1.0
     mu_hom: Callable | None = None
     A: float = 0.25
+    bc: tuple = ('periodic', 'periodic', 'periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
     
     def __post_init__(self):

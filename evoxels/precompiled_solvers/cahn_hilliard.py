@@ -1,4 +1,4 @@
-from ..problem_definition import PeriodicCahnHilliard
+from ..problem_definition import CahnHilliard
 from ..solvers import TimeDependentSolver
 from ..timesteppers import PseudoSpectralIMEX
 from typing import Callable
@@ -26,7 +26,7 @@ def run_cahn_hilliard_solver(
         voxelfields,
         fieldnames,
         backend,
-        problem_cls = PeriodicCahnHilliard,
+        problem_cls = CahnHilliard,
         timestepper_cls = PseudoSpectralIMEX,
         device=device,
     )
