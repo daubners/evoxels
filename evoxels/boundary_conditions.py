@@ -46,11 +46,11 @@ class CellCenteredBCs:
     
     def pad_fft_dirichlet_periodic(self, field):
         """Pad with inverse of flipped field in x direction."""
-        return self.vg.concatenate((field, -self.vg.lib.flip(field, [0])), 1)
+        return self.vg.concatenate((field, -self.vg.lib.flip(field, [1])), 1)
     
     def pad_fft_zero_flux_periodic(self, field):
         """Pad with flipped field in x direction."""
-        return self.vg.concatenate((field, self.vg.lib.flip(field, [0])), 1)
+        return self.vg.concatenate((field, self.vg.lib.flip(field, [1])), 1)
 
     def trim_boundary_nodes(self, field):
         return field
@@ -114,7 +114,7 @@ class StaggeredXBCs:
     def pad_fft_dirichlet_periodic(self, field):
         """Pad with inverse of flipped field in x direction."""
         bc = self.vg.lib.zeros_like(field[:,0:1])
-        return self.vg.concatenate((field, bc, -self.vg.lib.flip(field, [0]), bc), 1)
+        return self.vg.concatenate((field, bc, -self.vg.lib.flip(field, [1]), bc), 1)
     
     def pad_fft_zero_flux_periodic(self, field):
         """Pad with flipped field in x direction."""

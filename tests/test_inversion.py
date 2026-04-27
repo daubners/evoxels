@@ -5,13 +5,13 @@ import numpy as np
 import pytest
 import evoxels as evo
 from evoxels.inversion import InversionModel
-from evoxels.problem_definition import PeriodicCahnHilliard
+from evoxels.problem_definition import CahnHilliard
 
 diffrax_available = importlib.util.find_spec("diffrax") is not None
 
 def test_train_validates_sequence_length():
     vf = evo.VoxelFields((4, 4, 4))
-    model = InversionModel(vf, PeriodicCahnHilliard)
+    model = InversionModel(vf, CahnHilliard)
     data = {
         "ts": np.array([0.0, 1.0, 2.0]),
         "ys": np.zeros((3, 4, 4, 4), dtype=np.float32),
@@ -27,7 +27,7 @@ def test_inversion_forward_solve_constant_solution():
 
     vf = evo.VoxelFields((4, 4, 4))
     vf.add_field('c', np.full((4, 4, 4), 0.5, dtype=np.float32))
-    model = InversionModel(vf, PeriodicCahnHilliard, {'eps': 3.0})
+    model = InversionModel(vf, CahnHilliard, {'eps': 3.0})
     saveat = dfx.SaveAt(ts=jnp.array([0.0, 0.1, 0.2], dtype=jnp.float32))
     sol = model.forward_solve({'D': 1.0}, 'c', saveat, dt0=0.1, verbose=False)
     assert sol.shape == (3, 4, 4, 4)
