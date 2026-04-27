@@ -4,7 +4,10 @@ import importlib.util
 import numpy as np
 import pytest
 import evoxels as evo
+from evoxels.problem_definition import TwoPhaseAllenCahn, ReactionDiffusion
 from evoxels.solvers import TimeDependentSolver
+from evoxels.timesteppers import ExponentialEuler
+from evoxels.voxelgrid import VoxelGridTorch
 
 jax_available = importlib.util.find_spec("jax") is not None
 
@@ -35,8 +38,8 @@ def test_1D_analytical_tanh_profile():
     vf = evo.VoxelFields((Nx, 1, 1), domain_size=(Nx, 1, 1))
     phi = np.zeros((Nx, 1, 1), dtype=np.float32)
     phi[: Nx // 2] = 1.0
-    vf.add_field("phi1", phi)
-    vf.add_field("phi2", phi)
+    vf.add_field("phi1", phi.copy())
+    vf.add_field("phi2", phi.copy())
 
     eps = 3.0
     evo.run_allen_cahn_solver(
@@ -45,8 +48,8 @@ def test_1D_analytical_tanh_profile():
         backend="torch",
         device="cpu",
         frames=1,
-        max_iters=13,
-        time_increment=0.1,
+        max_iters=10,
+        time_increment=0.5,
         eps=eps,
         jit=False,
         verbose=False,
@@ -57,8 +60,8 @@ def test_1D_analytical_tanh_profile():
         "phi2",
         backend="jax",
         frames=1,
-        max_iters=30,
-        time_increment=1,
+        max_iters=10,
+        time_increment=0.5,
         eps=eps,
         jit=True,
         verbose=False,
@@ -77,3 +80,28 @@ def test_1D_analytical_tanh_profile():
         f"Allen-Cahn error for 1D profile is > 5% ({L2_error1:.2f})"
     assert L2_error2 < 0.05,\
         f"Cahn-Hilliard error for 1D profile is > 5% ({L2_error2:.2f})"
+
+
+def test_reaction_diffusion_normalizes_bc():
+    vf = evo.VoxelFields((4, 4, 4))
+    vg = VoxelGridTorch(vf.grid_info(), device="cpu")
+    problem = ReactionDiffusion(
+        vg,
+        D=1.0,
+        bc=(('dirichlet', (1, -1)), 'periodic', 'periodic'),
+    )
+
+    assert problem.bc == (
+        ("dirichlet", (1, -1)),
+        ("periodic", None),
+        ("periodic", None),
+    )
+
+
+def test_exponential_euler_rejects_full_neumann_semilinear_problem():
+    vf = evo.VoxelFields((4, 4, 4))
+    vg = VoxelGridTorch(vf.grid_info(), device="cpu")
+    problem = TwoPhaseAllenCahn(vg)
+
+    with pytest.raises(ValueError, match="periodic boundary conditions in y and z"):
+        ExponentialEuler(problem, 0.1)

@@ -213,7 +213,7 @@ class VoxelFields:
             grid.cell_data[name] = self.fields[name].flatten(order="F")  # Fortran order flattening
         grid.save(filename)
 
-    def plot_slice(self, fieldname, slice_index, direction='z', time=None, colormap='viridis', value_bounds=None):
+    def plot_slice(self, fieldname, slice_index, direction='z', colormap='viridis', value_bounds=None):
         """
         Plots a 2D slice of a field along a specified direction.
 
@@ -263,10 +263,7 @@ class VoxelFields:
         plt.colorbar(im, shrink=ratio)
         plt.xlabel(label1)
         plt.ylabel(label2)
-        if time:
-            plt.title(f'Slice {slice_index} of {fieldname} in {direction} at time {time}')
-        else:
-            plt.title(f'Slice {slice_index} of {fieldname} in {direction}')
+        plt.title(f'Slice {slice_index} of {fieldname} in {direction}')
         plt.show()
 
     def plot_field_interactive(self, fieldname, direction='x', colormap='viridis', value_bounds=None):

@@ -162,3 +162,7 @@ cython_debug/
 #.idea/
 
 docs/_autosummary/
+AGENTS.md
+.codex/
+.github/agents/
+.vscode/
