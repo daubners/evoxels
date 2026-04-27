@@ -1,7 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import numpy as np
 from typing import Any
 from .problem_definition import ODE, SemiLinearODE
 

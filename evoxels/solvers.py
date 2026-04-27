@@ -1,4 +1,3 @@
-from IPython.display import clear_output
 from dataclasses import dataclass
 from typing import Callable, Any, Type
 from abc import ABC, abstractmethod
