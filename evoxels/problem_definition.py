@@ -111,12 +111,8 @@ class ODE(ABC):
             )
         elif self.bc_type == ('neumann','periodic','periodic'):
             self._pad_bc = self.vg.bc.pad_zero_flux_periodic
-        elif self.bc_type == ('neumann','neumann','neumann'):
-            self._pad_bc = self.vg.bc.pad_zero_flux
         else:
-            raise NotImplementedError(
-                f"Finite-difference BC combination {self.bc} is not implemented."
-            )
+            self._pad_bc = lambda field: self.vg.bc.pad_bc(field, self.bc)
 
     @property
     def bc_type(self):
@@ -140,11 +136,22 @@ class SemiLinearODE(ODE):
         pass
 
     def verify_fft_bc_config(self):
-        x_bc, y_bc, z_bc = self.bc_type
-        if y_bc != 'periodic' or z_bc != 'periodic':
+        x_bc, _, _ = self.bc_type
+        nonperiodic_axes = tuple(
+            axis for axis, kind in zip(('x', 'y', 'z'), self.bc_type)
+            if kind != 'periodic'
+        )
+
+        if len(nonperiodic_axes) > 1:
             raise ValueError(
-                "FFT-based timesteppers require periodic boundary conditions "
-                f"in y and z, got {self.bc_type}."
+                "FFT-based timesteppers currently support at most one non-periodic axis, "
+                f"got {self.bc_type}."
+            )
+
+        if len(nonperiodic_axes) == 1 and nonperiodic_axes[0] != 'x':
+            raise NotImplementedError(
+                "FFT-based timesteppers currently only implement the single non-periodic axis "
+                f"case for x; got {self.bc_type}. Axis permutation is not implemented yet."
             )
 
         if x_bc == 'periodic':

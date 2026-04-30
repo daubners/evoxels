@@ -85,11 +85,15 @@ def test_1D_analytical_tanh_profile():
 def test_reaction_diffusion_normalizes_bc():
     vf = evo.VoxelFields((4, 4, 4))
     vg = VoxelGridTorch(vf.grid_info(), device="cpu")
-    problem = ReactionDiffusion(
-        vg,
-        D=1.0,
-        bc=(('dirichlet', (1, -1)), 'periodic', 'periodic'),
-    )
+    with pytest.warns(
+        UserWarning,
+        match="Applying Dirichlet BCs on a cell_center grid reduces the spatial order of convergence to 0.5!",
+    ):
+        problem = ReactionDiffusion(
+            vg,
+            D=1.0,
+            bc=(('dirichlet', (1, -1)), 'periodic', 'periodic'),
+        )
 
     assert problem.bc == (
         ("dirichlet", (1, -1)),
@@ -98,10 +102,70 @@ def test_reaction_diffusion_normalizes_bc():
     )
 
 
+def test_reaction_diffusion_mixed_bc_uses_generic_padding_fallback():
+    vf = evo.VoxelFields((2, 2, 2))
+    vg = VoxelGridTorch(vf.grid_info(), device="cpu")
+    with pytest.warns(
+        UserWarning,
+        match="Applying Dirichlet BCs on a cell_center grid reduces the spatial order of convergence to 0.5!",
+    ):
+        problem = ReactionDiffusion(
+            vg,
+            D=1.0,
+            bc=(('dirichlet', (10.0, 20.0)), 'neumann', 'periodic'),
+        )
+    field = vg.init_scalar_field(np.arange(1, 9, dtype=np.float32).reshape(2, 2, 2))
+
+    padded = vg.to_numpy(problem.pad_bc(field))[0]
+    expected = np.pad(np.arange(1, 9, dtype=np.float32).reshape(2, 2, 2), 1, mode='wrap')
+    expected[0, :, :] = 2.0 * 10.0 - expected[1, :, :]
+    expected[-1, :, :] = 2.0 * 20.0 - expected[-2, :, :]
+    expected[:, 0, :] = expected[:, 1, :]
+    expected[:, -1, :] = expected[:, -2, :]
+
+    assert np.allclose(padded, expected)
+
+
+def test_reaction_diffusion_dirichlet_periodic_keeps_specialized_padding():
+    vf = evo.VoxelFields((2, 2, 2))
+    vg = VoxelGridTorch(vf.grid_info(), device="cpu")
+    with pytest.warns(
+        UserWarning,
+        match="Applying Dirichlet BCs on a cell_center grid reduces the spatial order of convergence to 0.5!",
+    ):
+        problem = ReactionDiffusion(
+            vg,
+            D=1.0,
+            bc=(('dirichlet', (1.0, -1.0)), 'periodic', 'periodic'),
+        )
+    field = vg.init_scalar_field(np.arange(1, 9, dtype=np.float32).reshape(2, 2, 2))
+
+    padded = problem.pad_bc(field)
+    expected = vg.bc.pad_dirichlet_periodic(field, 1.0, -1.0)
+
+    assert np.allclose(vg.to_numpy(padded), vg.to_numpy(expected))
+
+
+def test_reaction_diffusion_neumann_periodic_keeps_specialized_padding():
+    vf = evo.VoxelFields((2, 2, 2))
+    vg = VoxelGridTorch(vf.grid_info(), device="cpu")
+    problem = ReactionDiffusion(
+        vg,
+        D=1.0,
+        bc=('neumann', 'periodic', 'periodic'),
+    )
+    field = vg.init_scalar_field(np.arange(1, 9, dtype=np.float32).reshape(2, 2, 2))
+
+    padded = problem.pad_bc(field)
+    expected = vg.bc.pad_zero_flux_periodic(field)
+
+    assert np.allclose(vg.to_numpy(padded), vg.to_numpy(expected))
+
+
 def test_exponential_euler_rejects_full_neumann_semilinear_problem():
     vf = evo.VoxelFields((4, 4, 4))
     vg = VoxelGridTorch(vf.grid_info(), device="cpu")
     problem = TwoPhaseAllenCahn(vg)
 
-    with pytest.raises(ValueError, match="periodic boundary conditions in y and z"):
+    with pytest.raises(ValueError, match="support at most one non-periodic axis"):
         ExponentialEuler(problem, 0.1)
