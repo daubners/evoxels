@@ -167,5 +167,5 @@ def test_exponential_euler_rejects_full_neumann_semilinear_problem():
     vg = VoxelGridTorch(vf.grid_info(), device="cpu")
     problem = TwoPhaseAllenCahn(vg)
 
-    with pytest.raises(ValueError, match="periodic boundary conditions in y and z"):
+    with pytest.raises(ValueError, match="support at most one non-periodic axis"):
         ExponentialEuler(problem, 0.1)
