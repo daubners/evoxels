@@ -30,14 +30,32 @@ class CellCenteredBCs:
         padded = self.vg.set(padded, (__,-1,__,__), padded[:,-2,:,:])
         return padded
     
-    def pad_zero_flux(self, field):
-        padded = self.vg.pad_zeros(field)
-        padded = self.vg.set(padded, (__, 0,__,__), padded[:, 1,:,:])
-        padded = self.vg.set(padded, (__,-1,__,__), padded[:,-2,:,:])
-        padded = self.vg.set(padded, (__,__, 0,__), padded[:,:, 1,:])
-        padded = self.vg.set(padded, (__,__,-1,__), padded[:,:,-2,:])
-        padded = self.vg.set(padded, (__,__,__, 0), padded[:,:,:, 1])
-        padded = self.vg.set(padded, (__,__,__,-1), padded[:,:,:,-2])
+    def pad_bc(self, field, bc):
+        padded = self.vg.pad_periodic(field)
+        axis_slices = [
+            ((__, 0, __, __), (__, 1, __, __), (__, -1, __, __), (__, -2, __, __)),
+            ((__, __, 0, __), (__, __, 1, __), (__, __, -1, __), (__, __, -2, __)),
+            ((__, __, __, 0), (__, __, __, 1), (__, __, __, -1), (__, __, __, -2)),
+        ]
+
+        for axis_bc, (left_ghost, left_inner, right_ghost, right_inner) in zip(bc, axis_slices):
+            kind, values = axis_bc
+
+            if kind == 'periodic':
+                continue
+
+            if kind == 'neumann':
+                padded = self.vg.set(padded, left_ghost, padded[left_inner])
+                padded = self.vg.set(padded, right_ghost, padded[right_inner])
+                continue
+
+            if kind == 'dirichlet':
+                padded = self.vg.set(padded, left_ghost, 2.0 * values[0] - padded[left_inner])
+                padded = self.vg.set(padded, right_ghost, 2.0 * values[1] - padded[right_inner])
+                continue
+
+            raise ValueError(f"Unsupported BC type: {kind}")
+
         return padded
     
     def pad_fft_periodic(self, field):
@@ -101,16 +119,16 @@ class StaggeredXBCs:
         padded = self.vg.set(padded, (__,-1,__,__), fac1*padded[:,-2,:,:] - fac2*padded[:,-3,:,:])
         return padded
 
-    def pad_zero_flux(self, field):
+    def pad_bc(self, field, bc):
         raise NotImplementedError
-    
+
     def pad_fft_periodic(self, field):
         """
         If field is fully periodic it should be in
         cell center convention!
         """
         raise NotImplementedError
-    
+
     def pad_fft_dirichlet_periodic(self, field):
         """Pad with inverse of flipped field in x direction."""
         bc = self.vg.lib.zeros_like(field[:,0:1])
