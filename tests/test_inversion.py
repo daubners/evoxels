@@ -6,6 +6,7 @@ import pytest
 import evoxels as evo
 from evoxels.inversion import InversionModel
 from evoxels.problem_definition import CahnHilliard
+from evoxels.timesteppers import PseudoSpectralIMEX
 
 diffrax_available = importlib.util.find_spec("diffrax") is not None
 
@@ -27,8 +28,28 @@ def test_inversion_forward_solve_constant_solution():
 
     vf = evo.VoxelFields((4, 4, 4))
     vf.add_field('c', np.full((4, 4, 4), 0.5, dtype=np.float32))
-    model = InversionModel(vf, CahnHilliard, {'eps': 3.0})
+    model = InversionModel(vf, CahnHilliard, problem_kwargs={'eps': 3.0})
     saveat = dfx.SaveAt(ts=jnp.array([0.0, 0.1, 0.2], dtype=jnp.float32))
     sol = model.forward_solve({'D': 1.0}, 'c', saveat, dt0=0.1, verbose=False)
+    assert sol.shape == (3, 4, 4, 4)
+    np.testing.assert_allclose(np.array(sol), 0.5, atol=1e-6)
+
+
+@pytest.mark.skipif(not diffrax_available, reason="diffrax not installed")
+def test_inversion_forward_solve_accepts_explicit_timestepper():
+    import diffrax as dfx
+    import jax.numpy as jnp
+
+    vf = evo.VoxelFields((4, 4, 4))
+    vf.add_field('c', np.full((4, 4, 4), 0.5, dtype=np.float32))
+    model = InversionModel(
+        vf,
+        CahnHilliard,
+        timestepper_cls=PseudoSpectralIMEX,
+        problem_kwargs={'eps': 3.0},
+    )
+    saveat = dfx.SaveAt(ts=jnp.array([0.0, 0.1, 0.2], dtype=jnp.float32))
+    sol = model.forward_solve({'D': 1.0}, 'c', saveat, dt0=0.1, verbose=False)
+
     assert sol.shape == (3, 4, 4, 4)
     np.testing.assert_allclose(np.array(sol), 0.5, atol=1e-6)

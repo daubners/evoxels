@@ -1,4 +1,3 @@
-import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -15,7 +14,6 @@ class TimeStepper(ABC):
         """Temporal order of accuracy."""
         pass
 
-    @abstractmethod
     def step(self, t: float, u: State) -> State:
         """
         Take one timestep from t to (t+dt).
@@ -26,10 +24,15 @@ class TimeStepper(ABC):
         Returns:
             Updated state at t + dt.
         """
+        return self.step_dt(t, self.dt, u)
+
+    @abstractmethod
+    def step_dt(self, t: float, dt: float, u: State) -> State:
+        """Take one timestep from ``t`` to ``t + dt``."""
         pass
 
 
-@dataclass
+@dataclass(eq=False)
 class ForwardEuler(TimeStepper):
     """First order Euler forward scheme."""
     problem: ODE
@@ -39,11 +42,11 @@ class ForwardEuler(TimeStepper):
     def order(self) -> int:
         return 1
 
-    def step(self, t: float, u: State) -> State:
-        return u + self.dt * self.problem.rhs(t, u)
+    def step_dt(self, t: float, dt: float, u: State) -> State:
+        return u + dt * self.problem.rhs(t, u)
 
 
-@dataclass
+@dataclass(eq=False)
 class RungeKutta4(TimeStepper):
     """Classical explicit Runge-Kutta Scheme of order 4."""
     problem: ODE
@@ -53,15 +56,15 @@ class RungeKutta4(TimeStepper):
     def order(self) -> int:
         return 4
 
-    def step(self, t: float, u: State) -> State:
+    def step_dt(self, t: float, dt: float, u: State) -> State:
         k1 = self.problem.rhs(t, u)
-        k2 = self.problem.rhs(t + 0.5*self.dt, u + 0.5*self.dt*k1)
-        k3 = self.problem.rhs(t + 0.5*self.dt, u + 0.5*self.dt*k2)
-        k4 = self.problem.rhs(t + self.dt, u + self.dt*k3)
-        return u + (self.dt/6) * (k1 + 2*k2 + 2*k3 + k4)
+        k2 = self.problem.rhs(t + 0.5*dt, u + 0.5*dt*k1)
+        k3 = self.problem.rhs(t + 0.5*dt, u + 0.5*dt*k2)
+        k4 = self.problem.rhs(t + dt, u + dt*k3)
+        return u + (dt/6) * (k1 + 2*k2 + 2*k3 + k4)
 
 
-@dataclass
+@dataclass(eq=False)
 class PseudoSpectralIMEX(TimeStepper):
     """First‐order IMEX Fourier pseudo‐spectral scheme
     
@@ -73,7 +76,7 @@ class PseudoSpectralIMEX(TimeStepper):
     dt: float
 
     def __post_init__(self):
-        # Pre‐bake the linear prefactor in Fourier
+        # Cache the fixed-step Fourier prefactor for the standard step() path.
         self._fft_prefac = self.dt / (1 - self.dt*self.problem.fourier_symbol)
         self.problem.verify_fft_bc_config()
         self.pad = self.problem.pad_fft_bc
@@ -88,52 +91,14 @@ class PseudoSpectralIMEX(TimeStepper):
         update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
         return u + update
 
+    def step_dt(self, t: float, dt: float, u: State) -> State:
+        dc = self.pad(self.problem.rhs(t, u))
+        fft_prefac = dt / (1 - dt*self.problem.fourier_symbol)
+        dc_fft = fft_prefac * self.problem.vg.rfftn(dc, dc.shape)
+        update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
+        return u + update
 
-try:
-    import jax.numpy as jnp
-    import diffrax as dfx
-
-    class PseudoSpectralIMEX_dfx(dfx.AbstractSolver):
-        """Re-implementation of pseudo_spectral_IMEX as diffrax class
-        
-        This is used for the inversion models based on jax and diffrax
-        """
-        fourier_symbol: float
-        term_structure = dfx.ODETerm
-        interpolation_cls = dfx.LocalLinearInterpolation
-
-        def order(self, terms):
-            return 1
-
-        def init(self, terms, t0, t1, y0, args):
-            return None
-
-        def step(self, terms, t0, t1, y0, args, solver_state, made_jump):
-            del solver_state, made_jump
-            δt = t1 - t0
-            f0 = terms.vf(t0, y0, args)
-            euler_y1 = y0 + δt * f0
-            dc_fft = jnp.fft.rfftn(f0)
-            dc_fft *= δt / (1.0 - self.fourier_symbol * δt)
-            update = jnp.fft.irfftn(dc_fft, f0.shape)
-            y1 = y0 + update
-
-            y_error = y1 - euler_y1
-            dense_info = dict(y0=y0, y1=y1)
-
-            solver_state = None
-            result = dfx.RESULTS.successful
-            return y1, y_error, dense_info, solver_state, result
-
-        def func(self, terms, t0, y0, args):
-            return terms.vf(t0, y0, args)
-        
-except ImportError:
-    PseudoSpectralIMEX_dfx = None
-    warnings.warn("Diffrax not found. 'PseudoSpectralIMEX_dfx' will not be available.")
-
-
-@dataclass
+@dataclass(eq=False)
 class ExponentialEuler(TimeStepper):
     """First-order exponential Euler (ETD1) method for semilinear problems.
 
@@ -148,6 +113,7 @@ class ExponentialEuler(TimeStepper):
     dt: float
 
     def __post_init__(self):
+        # Cache the fixed-step spectral factor for the standard step() path.
         self.phi_1_k_squared = self.phi1(self.dt*self.problem.fourier_symbol)
         self.problem.verify_fft_bc_config()
         self.pad = self.problem.pad_fft_bc
@@ -162,11 +128,12 @@ class ExponentialEuler(TimeStepper):
         Q = 6
         N = [1, 1/26,  5/156,  1/858, 1/5720,  1/205920, 1/8648640]
         D = [1, -6/13, 5/52,  -5/429, 1/1144, -1/25740,  1/1235520]
-        
-        phi = (self.problem.vg.lib.exp(z) - 1) / z
-        indx = (self.problem.vg.lib.abs(z) < 0.5)
-        phi = self.problem.vg.set(phi, indx, self.phiPade(z[indx], Q, N, D))
-        return phi
+
+        mask = self.problem.vg.lib.abs(z) < 0.5
+        safe_z = self.problem.vg.lib.where(mask, 1.0, z)
+        phi_direct = (self.problem.vg.lib.exp(z) - 1) / safe_z
+        phi_pade = self.phiPade(z, Q, N, D)
+        return self.problem.vg.lib.where(mask, phi_pade, phi_direct)
 
     def phiPade(self, z, Q, Ncoeff, Dcoeff):
         """Evaluate (Q,Q)-Padé approximation of phi-function
@@ -198,8 +165,15 @@ class ExponentialEuler(TimeStepper):
         update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
         return u + update
 
+    def step_dt(self, t: float, dt: float, u: State) -> State:
+        dc = self.pad(self.problem.rhs(t, u))
+        phi_1_k_squared = self.phi1(dt*self.problem.fourier_symbol)
+        dc_fft = dt * phi_1_k_squared * self.problem.vg.rfftn(dc, dc.shape)
+        update = self.problem.vg.irfftn(dc_fft, dc.shape)[:,:u.shape[1]]
+        return u + update
 
-@dataclass
+
+@dataclass(eq=False)
 class RKC1(TimeStepper):
     """Runge-Kutta-Chebyshev Scheme of order 1.
     
@@ -230,20 +204,20 @@ class RKC1(TimeStepper):
     def order(self) -> int:
         return 1
 
-    def step(self, t: float, u: State) -> State:
+    def step_dt(self, t: float, dt: float, u: State) -> State:
         Y_prev = u
-        Y_curr = u + self.mu11 * self.dt * self.problem.rhs(t, u)
+        Y_curr = u + self.mu11 * dt * self.problem.rhs(t, u)
         for j in range(self.polygrad-1):
-            rhs = self.problem.rhs(t + self.c[j]*self.dt, Y_curr)
+            rhs = self.problem.rhs(t + self.c[j]*dt, Y_curr)
             Y_new = (  self.mu0[j] * Y_curr 
                      + self.nu[j] * Y_prev
                      + (1 - self.mu0[j] - self.nu[j]) * u
-                     + self.mu1[j] * self.dt * rhs)
+                     + self.mu1[j] * dt * rhs)
             Y_prev = Y_curr
             Y_curr = Y_new
         return Y_curr
 
-@dataclass
+@dataclass(eq=False)
 class RKC2(TimeStepper):
     """Runge-Kutta-Chebyshev Scheme of order 2.
     
@@ -263,8 +237,8 @@ class RKC2(TimeStepper):
         dT_w0 = s*self.problem.vg.lib.sinh(s*self.problem.vg.lib.arccosh(w0))/self.problem.vg.lib.sqrt(w0**2 - 1)
         d2T_w0 = (s*s * T_w0 - w0 * dT_w0) / (w0**2 - 1)
         b = d2T_w0/dT_w0**2
-        b[0] = b[2]
-        b[1] = b[2]
+        b = self.problem.vg.set(b, 0, b[2])
+        b = self.problem.vg.set(b, 1, b[2])
 
         w1 = dT_w0[-1]/d2T_w0[-1]
         self.mu0 = 2 * w0 * (b[2:]/b[1:-1])
@@ -273,23 +247,23 @@ class RKC2(TimeStepper):
         self.nu  = -(b[2:]/b[:-2])
         self.gamma = -(1-b[1:-1]*T_w0[1:-1])*self.mu1
         self.c = w1 * (d2T_w0/dT_w0)[1:-1]
-        self.c[0] = self.c[1]/dT_w0[2]
+        self.c = self.problem.vg.set(self.c, 0, self.c[1]/dT_w0[2])
 
     @property
     def order(self) -> int:
         return 2
 
-    def step(self, t: float, u: State) -> State:
+    def step_dt(self, t: float, dt: float, u: State) -> State:
         Y_prev = u
         rhs_0 = self.problem.rhs(t, u)
-        Y_curr = u + self.mu11 * self.dt * rhs_0
+        Y_curr = u + self.mu11 * dt * rhs_0
         for j in range(self.polygrad-1):
-            rhs = self.problem.rhs(t + self.c[j]*self.dt, Y_curr)
+            rhs = self.problem.rhs(t + self.c[j]*dt, Y_curr)
             Y_new = (  self.mu0[j] * Y_curr
                      + self.nu[j] * Y_prev
                      + ( 1 - self.mu0[j] - self.nu[j] ) * u
-                     + self.mu1[j] * self.dt * rhs
-                     + self.gamma[j] * self.dt * rhs_0)
+                     + self.mu1[j] * dt * rhs
+                     + self.gamma[j] * dt * rhs_0)
             Y_prev = Y_curr
             Y_curr = Y_new
         return Y_curr
