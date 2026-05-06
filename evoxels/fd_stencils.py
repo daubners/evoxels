@@ -98,6 +98,5 @@ class FDStencils:
                   (field[:,1:-1,2:,2:] + field[:,1:-1,:-2,:-2] -\
                    field[:,1:-1,:-2,2:] - field[:,1:-1,2:,:-2]) * self.div_dx[1] * self.div_dx[2]
         norm2 = self.gradient_norm_squared(field)
-        bulk = self.lib.where(norm2 <= 1e-7)
-        norm2 = self.set(norm2, bulk, 1.0)
-        return n_laplace/norm2
+        safe_norm2 = self.lib.where(norm2 <= 1e-7, 1.0, norm2)
+        return n_laplace / safe_norm2

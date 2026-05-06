@@ -2,7 +2,8 @@ from functools import partial
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from typing import Any, Type, Optional
-from evoxels.timesteppers import PseudoSpectralIMEX_dfx
+from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
+from evoxels.timesteppers import PseudoSpectralIMEX, TimeStepper
 
 try:
     import diffrax as dfx
@@ -21,16 +22,17 @@ DIFFRAX_AVAILABLE = dfx is not None
 class InversionModel:
     """Inverse modeling using JAX and diffrax.
 
-    This small helper class wraps the differentiable solver implementation and
-    provides utilities to fit material parameters via gradient based
-    optimization.  It is intentionally lightweight so that new users can easily
-    follow the individual steps: solving the PDE, computing residuals and
-    running a least squares optimiser.
+    This lightweight helper wraps differentiable forward solves for ``evoxels``
+    problem classes and provides utilities to fit model parameters via
+    gradient-based optimization. It is intentionally minimal so that the
+    individual steps of solving a PDE, computing residuals, and running a
+    least-squares optimizer remain easy to follow.
     """
     vf: Any  # VoxelFields object
     problem_cls: Type
     pos_params: Optional[list[str]] = None
     problem_kwargs: Optional[dict[str, Any]] = None
+    timestepper_cls: Type[TimeStepper] = PseudoSpectralIMEX
     backend: str = 'jax'
 
     def __post_init__(self):
@@ -44,24 +46,28 @@ class InversionModel:
 
             if not DIFFRAX_AVAILABLE:
                 raise ImportError(
-                    "CahnHilliardInversionModel requires the optional JAX"
+                    "InversionModel requires the optional JAX"
                     " dependencies (jax, diffrax)."
                 )
+        else:
+            raise ValueError(
+                f"InversionModel currently only supports backend='jax', got {self.backend!r}."
+            )
             
     def solve(self, parameters, y0, saveat, adjoint=dfx.ForwardMode(), dt0=0.1):
-        """Integrate the Cahn--Hilliard equation for a given parameter set.
+        """Integrate the configured problem for a given parameter set.
 
         Args:
-            parameters (dict): Dictionary containing the material parameters to
+            parameters (dict): Dictionary containing the model parameters to
                 solve with.
-            y0 (array-like): Initial concentration field.
+            y0 (array-like): Initial state field.
             saveat (:class:`diffrax.SaveAt`): Time points at which the solution
                 should be stored.
             adjoint: Differentiation mode used by :func:`diffrax.diffeqsolve`.
             dt0 (float): Initial step size for the time integrator.
 
         Returns:
-            jax.Array: Array of saved concentration fields with shape
+            jax.Array: Array of saved state fields with shape
             ``(len(saveat.ts), Nx, Ny, Nz)``.
         """
         u = self.vg.init_scalar_field(y0)
@@ -69,7 +75,8 @@ class InversionModel:
         if self.pos_params:
             parameters = {k: jnp.exp(v) if k in self.pos_params else v for k, v in parameters.items()}
         problem = self.problem_cls(self.vg, **self.problem_kwargs, **parameters)
-        solver = PseudoSpectralIMEX_dfx(problem.fourier_symbol)
+        stepper = self.timestepper_cls(problem, dt0)
+        solver = DiffraxTimeStepperAdapter(stepper)
 
         solution = dfx.diffeqsolve(
             dfx.ODETerm(lambda t, y, args: problem.rhs(t, y)),
@@ -109,7 +116,7 @@ class InversionModel:
             parameters (dict): Current estimate of the model parameters.
             y0s__values__saveat (tuple): Tuple ``(y0s, values, saveat)`` where
                 ``y0s`` contains the initial states for each sequence, ``values``
-                contains the observed states and ``saveat`` specifies the time
+                contains the observed states, and ``saveat`` specifies the time
                 points of these observations.
             adjoint: Differentiation mode for :func:`solve`.
 
@@ -144,7 +151,7 @@ class InversionModel:
             initial_parameters (dict): Initial guess for the parameters to be
                 optimised.
             data (dict): Dictionary containing ``"ts"`` (time stamps) and
-                ``"ys"`` (concentration fields) as produced by :func:`solve`.
+                ``"ys"`` (state fields) as produced by :func:`solve`.
             inds (list[list[int]]): For each sequence, the indices in ``data``
                 that should be used for training. All sequences must have the
                 same spacing.
