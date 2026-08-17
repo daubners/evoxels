@@ -28,6 +28,26 @@ def test_time_solver_multiple_fields():
     assert np.allclose(vf.fields["a"], 2)
     assert np.allclose(vf.fields["b"], 1)
 
+
+def test_precompiled_multi_phase_solver_labels_mode():
+    vf = evo.VoxelFields((4, 4, 1))
+    labels = np.zeros(vf.shape, dtype=np.int32)
+    labels[2:, :, :] = 1
+    vf.add_field("labels", labels)
+
+    evo.run_multi_phase_solver(
+        vf,
+        "labels",
+        backend="torch",
+        device="cpu",
+        frames=1,
+        max_iters=1,
+        jit=False,
+        verbose=False,
+    )
+
+    assert set(np.unique(vf.fields["labels"])).issubset({0, 1})
+
 @pytest.mark.skipif(not jax_available, reason="jax not installed")
 def test_1D_analytical_tanh_profile():
     """1D analytical phase-field solution
