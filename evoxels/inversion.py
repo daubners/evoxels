@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer

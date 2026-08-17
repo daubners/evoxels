@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sys
 import warnings
 from abc import ABC, abstractmethod

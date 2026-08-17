@@ -1,3 +1,4 @@
+from __future__ import annotations
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -17,7 +18,6 @@ class ODE(ABC):
     @abstractmethod
     def order(self) -> int:
         """Spatial order of convergence for numerical right-hand side."""
-        pass
 
     @abstractmethod
     def rhs_analytic(self, t, u):
@@ -30,7 +30,6 @@ class ODE(ABC):
         Returns:
             Sympy function of problem right-hand side.
         """
-        pass
 
     @abstractmethod
     def rhs(self, t, u):
@@ -43,7 +42,6 @@ class ODE(ABC):
         Returns:
             Same type as ``u`` containing the time derivative.
         """
-        pass
 
     def pad_bc(self, u):
         """Function to pad and impose boundary conditions.
@@ -135,7 +133,6 @@ class SemiLinearODE(ODE):
         
         The symbol is required for pseudo-spectral timesteppers.
         """
-        pass
 
     def verify_fft_bc_config(self):
         x_bc, _, _ = self.bc_type
@@ -187,7 +184,6 @@ class SmoothedBoundaryODE(ODE):
     @abstractmethod
     def mask(self) -> Any | float:
         """A field (same shape as the state) that remains fixed."""
-        pass
 
 
 @dataclass

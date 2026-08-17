@@ -41,7 +41,6 @@ class MemoryProfiler(ABC):
     @abstractmethod
     def print_memory_stats(self, start: float, end: float, iters: int):
         """Print profiling summary after a simulation run."""
-        pass
 
 class TorchMemoryProfiler(MemoryProfiler):
     def __init__(self, device):
