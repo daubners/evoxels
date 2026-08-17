@@ -21,7 +21,7 @@ def rhs_convergence_test(
     mask_function = None,
     convention = "cell_center",
     dtype = "float32",
-    powers = np.array([3,4,5,6,7]),
+    powers = (3, 4, 5, 6, 7),
     backend = "torch"
 ):
     """Evaluate spatial order of an ODE right-hand side.
@@ -144,8 +144,8 @@ def mms_convergence_test(
     convention="cell_center",
     dtype="float32",
     mode = 'temporal',
-    g_powers = np.array([3,4,5,6,7]),
-    t_powers = np.array([3,4,5,6,7]),
+    g_powers = (3, 4, 5, 6, 7),
+    t_powers = (3, 4, 5, 6, 7),
     t_final = 1,
     backend = "jax",
     device = 'cpu'
@@ -241,7 +241,7 @@ def mms_convergence_test(
 
         # Construct new rhs including forcing term from MMS
         if mode == 'temporal':
-            def mms_rhs(t, u):
+            def mms_rhs(t, u, rhs_orig=rhs_orig, vg=vg, grid=grid):
                 """Manufactured solution rhs
                 with numerical evaluation of rhs in forcing, i.e.
                 forcing = du/dt_exact(t,grid) - rhs_num(t, u_exact(t,grid))
@@ -270,7 +270,7 @@ def mms_convergence_test(
                 rhs_func = ODE.rhs_analytic(t, test_functions[0])
                 rhs_analytic = [sp.lambdify((t, CS.x, CS.y, CS.z), sp.N(rhs_func), backend)]
 
-            def mms_rhs(t, u):
+            def mms_rhs(t, u, rhs_orig=rhs_orig, vg=vg, rhs_analytic=rhs_analytic, grid=grid):
                 """Manufactured solution rhs
                 with analytical evaluation of rhs in forcing, i.e.
                 forcing = du/dt_exact(t,grid) - rhs_exact(t, grid)
