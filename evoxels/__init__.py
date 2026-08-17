@@ -6,8 +6,8 @@ from .precompiled_solvers.cahn_hilliard import run_cahn_hilliard_solver
 from .voxelfields import VoxelFields
 
 __all__ = [
+    "InversionModel",
     "VoxelFields",
-    "run_cahn_hilliard_solver",
     "run_allen_cahn_solver",
-    "InversionModel"
+    "run_cahn_hilliard_solver"
 ]

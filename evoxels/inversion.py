@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Optional
+from typing import Any
 
 from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
 from evoxels.timesteppers import PseudoSpectralIMEX, TimeStepper
@@ -32,8 +33,8 @@ class InversionModel:
     """
     vf: Any  # VoxelFields object
     problem_cls: type
-    pos_params: Optional[list[str]] = None
-    problem_kwargs: Optional[dict[str, Any]] = None
+    pos_params: list[str] | None = None
+    problem_kwargs: dict[str, Any] | None = None
     timestepper_cls: type[TimeStepper] = PseudoSpectralIMEX
     backend: str = 'jax'
 
@@ -57,7 +58,7 @@ class InversionModel:
                 f"InversionModel currently only supports backend='jax', got {self.backend!r}."
             )
             
-    def solve(self, parameters, y0, saveat, adjoint=dfx.ForwardMode(), dt0=0.1):
+    def solve(self, parameters, y0, saveat, adjoint=None, dt0=0.1):
         """Integrate the configured problem for a given parameter set.
 
         Args:
@@ -73,6 +74,9 @@ class InversionModel:
             jax.Array: Array of saved state fields with shape
             ``(len(saveat.ts), Nx, Ny, Nz)``.
         """
+        if adjoint is None:
+            adjoint = dfx.ForwardMode()
+
         u = self.vg.init_scalar_field(y0)
         u = self.vg.bc.trim_boundary_nodes(u)
         if self.pos_params:
@@ -112,7 +116,7 @@ class InversionModel:
 
         return sol
     
-    def residuals(self, parameters, y0s__values__saveat, adjoint=dfx.ForwardMode()):
+    def residuals(self, parameters, y0s__values__saveat, adjoint=None):
         """Calculate residuals between measured and simulated states.
 
         Args:
@@ -126,6 +130,9 @@ class InversionModel:
         Returns:
             jax.Array: Array of residuals with shape matching ``values``.
         """
+        if adjoint is None:
+            adjoint = dfx.ForwardMode()
+
         y0s, values, saveat = y0s__values__saveat
         solve_ = partial(self.solve, adjoint=adjoint)
         batch_solve = jax.vmap(solve_, in_axes=(None, 0, None))
@@ -138,7 +145,7 @@ class InversionModel:
         initial_parameters,
         data,
         inds,
-        adjoint=dfx.ForwardMode(),
+        adjoint=None,
         rtol=1e-6,
         atol=1e-6,
         verbose=True,
@@ -166,6 +173,9 @@ class InversionModel:
         Returns:
             optimistix.State: The optimiser state after termination.
         """
+        if adjoint is None:
+            adjoint = dfx.ForwardMode()
+
         # Get length of first sequence to use as reference
         ref_len = len(inds[0])
         if ref_len < 2:

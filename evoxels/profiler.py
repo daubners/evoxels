@@ -26,7 +26,7 @@ class MemoryProfiler(ABC):
                 encoding='utf-8'
             )
             return int(output.strip().split('\n')[0])
-        except Exception as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             print(f"Error tracking memory with nvidia-smi: {e}")
 
     def update_memory_stats(self):

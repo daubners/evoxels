@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import sys
 import warnings
 from abc import ABC, abstractmethod
@@ -180,15 +181,15 @@ class BaseSolver(ABC):
             self._plot_frame(u, time, colormap, plot_bounds)
             try:
                 from IPython.display import display
-                if not hasattr(self, "_disp"):
-                    self._disp = display(self._fig, display_id=True)
-                    if not hasattr(self, "_closed"):
-                        plt.close(self._fig)
-                        self._closed = True
-                else:
-                    self._disp.update(self._fig)
-            except Exception:
-                pass
+            except ImportError:
+                return
+            if not hasattr(self, "_disp"):
+                self._disp = display(self._fig, display_id=True)
+                if not hasattr(self, "_closed"):
+                    plt.close(self._fig)
+                    self._closed = True
+            else:
+                self._disp.update(self._fig)
 
 @dataclass
 class TimeDependentSolver(BaseSolver):
@@ -287,7 +288,7 @@ class MultiPhaseSolver(TimeDependentSolver):
             self.phase_labels = uniq
             self.phase_count = int(uniq.size)
         else:
-            self.phase_count = int(len(self.fieldnames))
+            self.phase_count = len(self.fieldnames)
 
         if self.phase_count > self.max_phases:
             self._warn_too_many_phases_and_exit(self.phase_count)
