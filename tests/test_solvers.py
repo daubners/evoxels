@@ -52,9 +52,9 @@ def test_precompiled_multi_phase_solver_labels_mode():
 def test_1D_analytical_tanh_profile():
     """1D analytical phase-field solution
     
-    The 1D equilibrium solution of the double well potential
-    is a  tanh profile. This is valid for both the Allen-Cahn
-    equation and the Cahn-Hilliard equation.
+    The 1D equilibrium solution of the double-well potential is a tanh
+    profile for two-phase Allen-Cahn, Cahn-Hilliard, and two-channel
+    multiphase Allen-Cahn.
     """
     Nx = 16
     vf = evo.VoxelFields((Nx, 1, 1), domain_size=(Nx, 1, 1))
@@ -62,17 +62,23 @@ def test_1D_analytical_tanh_profile():
     phi[: Nx // 2] = 1.0
     vf.add_field("phi1", phi.copy())
     vf.add_field("phi2", phi.copy())
+    vf.add_field("phia", phi.copy())
+    vf.add_field("phib", (1 - phi).copy())
 
     eps = 3.0
+    steps = 20
+    bcs = ("neumann", "periodic", "periodic")
     evo.run_allen_cahn_solver(
         vf,
         "phi1",
         backend="torch",
         device="cpu",
         frames=1,
-        max_iters=10,
+        max_iters=steps,
         time_increment=0.5,
         eps=eps,
+        curvature=1.0,
+        bc=bcs,
         jit=False,
         verbose=False,
     )
@@ -82,26 +88,47 @@ def test_1D_analytical_tanh_profile():
         "phi2",
         backend="jax",
         frames=1,
-        max_iters=10,
+        max_iters=steps,
         time_increment=0.5,
         eps=eps,
+        bc=bcs,
         jit=True,
+        verbose=False,
+    )
+    evo.run_multi_phase_solver(
+        vf,
+        ("phia", "phib"),
+        backend="torch",
+        device="cpu",
+        from_labels=False,
+        time_increment=0.5,
+        frames=1,
+        max_iters=steps,
+        eps=eps,
+        M=1.0,
+        curvature=1.0,
+        bc=bcs,
+        jit=False,
         verbose=False,
     )
 
     phi1_numeric = vf.fields["phi1"].squeeze()
     phi2_numeric = vf.fields["phi2"].squeeze()
+    phi3_numeric = vf.fields["phia"].squeeze()
 
     x = np.arange(Nx) + 0.5
     phi_analytic = 0.5 - 0.5*np.tanh(3*(x - 0.5*Nx) / 2 / eps)
     L2_error1 = np.linalg.norm(phi1_numeric - phi_analytic)
-    L2_error2 = np.linalg.norm(phi2_numeric[(x>5) & (x<11)] -\
-                               phi_analytic[(x>5) & (x<11)] )
+    L2_error2 = np.linalg.norm(phi2_numeric - phi_analytic)
+    L2_error3 = np.linalg.norm(phi3_numeric - phi_analytic)
     
-    assert L2_error1 < 0.05,\
-        f"Allen-Cahn error for 1D profile is > 5% ({L2_error1:.2f})"
-    assert L2_error2 < 0.05,\
-        f"Cahn-Hilliard error for 1D profile is > 5% ({L2_error2:.2f})"
+    assert L2_error1 < 0.03,\
+        f"Allen-Cahn error for 1D profile is > 3% ({L2_error1:.2f})"
+    assert L2_error2 < 0.03,\
+        f"Cahn-Hilliard error for 1D profile is > 3% ({L2_error2:.2f})"
+    assert L2_error3 < 0.03,\
+        f"Multiphase error for 1D profile is > 3% ({L2_error3:.2f})"
+    np.testing.assert_allclose(phi1_numeric, phi3_numeric, rtol=0, atol=1e-6)
 
 
 def test_reaction_diffusion_normalizes_bc():
