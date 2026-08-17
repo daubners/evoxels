@@ -1,10 +1,12 @@
-import numpy as np
-import psutil
 import os
+import shutil
 import subprocess
 import tracemalloc
-import shutil
 from abc import ABC, abstractmethod
+
+import numpy as np
+import psutil
+
 
 class MemoryProfiler(ABC):
     """Base interface for tracking host and device memory usage."""

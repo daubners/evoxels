@@ -1,14 +1,17 @@
+import contextlib
+import io
+
+import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 import sympy.vector as spv
+from matplotlib.patches import Patch
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
+
 import evoxels as evo
 from evoxels.problem_definition import SmoothedBoundaryODE
 from evoxels.solvers import TimeDependentSolver
-import contextlib
-import io
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
-from matplotlib.patches import Patch
+
 
 ### Generalized test case
 def rhs_convergence_test(

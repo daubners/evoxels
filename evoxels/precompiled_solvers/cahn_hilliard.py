@@ -1,7 +1,9 @@
+from typing import Callable
+
 from ..problem_definition import CahnHilliard
 from ..solvers import TimeDependentSolver
 from ..timesteppers import PseudoSpectralIMEX
-from typing import Callable
+
 
 def run_cahn_hilliard_solver(
     voxelfields,

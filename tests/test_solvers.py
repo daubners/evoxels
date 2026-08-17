@@ -1,10 +1,12 @@
 """Tests for solver functionality."""
 
 import importlib.util
+
 import numpy as np
 import pytest
+
 import evoxels as evo
-from evoxels.problem_definition import TwoPhaseAllenCahn, ReactionDiffusion
+from evoxels.problem_definition import ReactionDiffusion, TwoPhaseAllenCahn
 from evoxels.solvers import TimeDependentSolver
 from evoxels.timesteppers import ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch

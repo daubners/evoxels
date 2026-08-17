@@ -1,15 +1,16 @@
-from functools import partial
 from dataclasses import dataclass
+from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Type, Optional
+from typing import Any, Optional, Type
+
 from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
 from evoxels.timesteppers import PseudoSpectralIMEX, TimeStepper
 
 try:
     import diffrax as dfx
-    import optimistix as optx
-    import jax.numpy as jnp
     import jax
+    import jax.numpy as jnp
+    import optimistix as optx
 except ImportError:
     dfx = None
     optx = None
@@ -40,6 +41,7 @@ class InversionModel:
         self.problem_kwargs = self.problem_kwargs or {}
         if self.backend == 'jax':
             from evoxels.voxelgrid import VoxelGridJax
+
             from .profiler import JAXMemoryProfiler
             self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
             self.profiler = JAXMemoryProfiler()

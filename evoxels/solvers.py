@@ -1,13 +1,16 @@
-from dataclasses import dataclass
-from typing import Callable, Any, Type
-from abc import ABC, abstractmethod
-from timeit import default_timer as timer
 import sys
 import warnings
-import numpy as np
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from timeit import default_timer as timer
+from typing import Any, Callable, Type
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 from .problem_definition import ODE
 from .timesteppers import TimeStepper
+
 
 @dataclass
 class BaseSolver(ABC):
@@ -23,15 +26,15 @@ class BaseSolver(ABC):
     def __post_init__(self):
         """Initialize backend specific components."""
         if self.backend == 'torch':
-            from .voxelgrid import VoxelGridTorch
             from .profiler import TorchMemoryProfiler
+            from .voxelgrid import VoxelGridTorch
             grid = self.vf.grid_info()
             self.vg = VoxelGridTorch(grid, precision=self.vf.precision, device=self.device)
             self.profiler = TorchMemoryProfiler(self.vg.device)
 
         elif self.backend == 'jax':
-            from .voxelgrid import VoxelGridJax
             from .profiler import JAXMemoryProfiler
+            from .voxelgrid import VoxelGridJax
             self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
             self.profiler = JAXMemoryProfiler()
         else:

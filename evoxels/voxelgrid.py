@@ -1,9 +1,11 @@
-import numpy as np
 import warnings
 from dataclasses import dataclass
-from typing import Tuple, Any
-from .fd_stencils import FDStencils
+from typing import Any, Tuple
+
+import numpy as np
+
 from .boundary_conditions import CellCenteredBCs, StaggeredXBCs
+from .fd_stencils import FDStencils
 
 
 @dataclass

@@ -1,7 +1,9 @@
+from typing import Callable
+
 from ..problem_definition import TwoPhaseAllenCahn
 from ..solvers import TimeDependentSolver
 from ..timesteppers import RungeKutta4
-from typing import Callable
+
 
 def run_allen_cahn_solver(
     voxelfields,

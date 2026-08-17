@@ -2,9 +2,14 @@
 
 import sympy as sp
 import sympy.vector as spv
-from evoxels.problem_definition import CahnHilliard, \
-    TwoPhaseAllenCahn, CoupledReactionDiffusion, ReactionDiffusionSBM, \
-    MultiPhaseAllenCahn
+
+from evoxels.problem_definition import (
+    CahnHilliard,
+    CoupledReactionDiffusion,
+    MultiPhaseAllenCahn,
+    ReactionDiffusionSBM,
+    TwoPhaseAllenCahn,
+)
 from evoxels.utils import rhs_convergence_test
 
 CS = spv.CoordSys3D('CS')

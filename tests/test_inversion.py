@@ -1,8 +1,10 @@
 """Test inversion model class"""
 
 import importlib.util
+
 import numpy as np
 import pytest
+
 import evoxels as evo
 from evoxels.inversion import InversionModel
 from evoxels.problem_definition import CahnHilliard

@@ -1,9 +1,11 @@
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
 import sympy as sp
 import sympy.vector as spv
-import warnings
+
 from .voxelgrid import VoxelGrid
 
 # Shorthands in slicing logic

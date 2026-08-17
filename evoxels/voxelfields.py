@@ -18,12 +18,15 @@
 # Also lass dich vom Charme dieses kantigen Ortes verzaubern,
 # wo jedes Voxel seinen Platz findet.
 
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
-import numpy as np
-from typing import Tuple
 import warnings
+from typing import Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import Slider
+
 from .voxelgrid import Grid
+
 
 class VoxelFields:
     """Manage 3D voxel grids for simulation, visualization, and I/O.
