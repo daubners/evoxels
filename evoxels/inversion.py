@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
 from evoxels.timesteppers import PseudoSpectralIMEX, TimeStepper
@@ -30,10 +30,10 @@ class InversionModel:
     least-squares optimizer remain easy to follow.
     """
     vf: Any  # VoxelFields object
-    problem_cls: Type
+    problem_cls: type
     pos_params: Optional[list[str]] = None
     problem_kwargs: Optional[dict[str, Any]] = None
-    timestepper_cls: Type[TimeStepper] = PseudoSpectralIMEX
+    timestepper_cls: type[TimeStepper] = PseudoSpectralIMEX
     backend: str = 'jax'
 
     def __post_init__(self):

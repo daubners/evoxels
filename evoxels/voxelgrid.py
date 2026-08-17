@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-from typing import Any, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -11,9 +11,9 @@ from .fd_stencils import FDStencils
 @dataclass
 class Grid:
     """Handles most basic properties"""
-    shape: Tuple[int, int, int]
-    origin: Tuple[float, float, float]
-    spacing: Tuple[float, float, float]
+    shape: tuple[int, int, int]
+    origin: tuple[float, float, float]
+    spacing: tuple[float, float, float]
     convention: str
 
 
@@ -78,25 +78,25 @@ class VoxelGrid(FDStencils):
         """Set ``field[index]`` to ``value`` and return ``field``."""
         raise NotImplementedError
     
-    def axes(self) -> Tuple[Any, ...]:
+    def axes(self) -> tuple[Any, ...]:
         """ Returns the 1D coordinate arrays along each axis. """
         return tuple(self.lib.arange(0, n) * self.spacing[i] + self.origin[i]
                      for i, n in enumerate(self.shape))
     
-    def fft_axes(self) -> Tuple[Any, ...]:
+    def fft_axes(self) -> tuple[Any, ...]:
         return tuple(2 * self.lib.pi * self.lib.fft.fftfreq(points, step)
                      for points, step in zip(self.shape, self.spacing))
     
-    def rfft_axes(self) -> Tuple[Any, ...]:
+    def rfft_axes(self) -> tuple[Any, ...]:
         return tuple(2 * self.lib.pi * self.lib.fft.rfftfreq(points, step)
                      for points, step in zip(self.shape, self.spacing))
     
-    def meshgrid(self) -> Tuple[Any, ...]:
+    def meshgrid(self) -> tuple[Any, ...]:
         """ Returns full 3D mesh grids for each axis. """
         ax = self.axes()
         return tuple(self.lib.meshgrid(*ax, indexing='ij'))
     
-    def fft_mesh(self) -> Tuple[Any, ...]:
+    def fft_mesh(self) -> tuple[Any, ...]:
         fft_axes = self.fft_axes()
         return tuple(self.lib.meshgrid(*fft_axes, indexing='ij'))
     

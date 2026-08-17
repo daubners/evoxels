@@ -3,7 +3,7 @@ import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from timeit import default_timer as timer
-from typing import Any, Callable, Type
+from typing import Any, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,8 +18,8 @@ class BaseSolver(ABC):
     vf: Any  # VoxelFields object
     fieldnames: str | list[str]
     backend: str
-    problem_cls: Type[ODE] | None = None
-    timestepper_cls: Type[TimeStepper] | None = None
+    problem_cls: type[ODE] | None = None
+    timestepper_cls: type[TimeStepper] | None = None
     step_fn: Callable | None = None
     device: str='cuda'
 
