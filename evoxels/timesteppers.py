@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from .problem_definition import ODE, SemiLinearODE
+from .pdes import ODE, SemiLinearODE
 
 State = Any  # e.g. torch.Tensor or jax.Array
 

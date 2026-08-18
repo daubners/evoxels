@@ -9,7 +9,7 @@ from matplotlib.patches import Patch
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
 
 import evoxels as evo
-from evoxels.problem_definition import SmoothedBoundaryODE
+from evoxels.pdes import SmoothedBoundaryODE
 from evoxels.solvers import TimeDependentSolver
 
 

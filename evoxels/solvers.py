@@ -10,7 +10,7 @@ from typing import Any, Callable
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .problem_definition import ODE
+from .pdes import ODE
 from .timesteppers import TimeStepper
 
 

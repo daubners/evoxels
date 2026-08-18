@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..problem_definition import MultiPhaseAllenCahn
+from ..pdes import MultiPhaseAllenCahn
 from ..solvers import MultiPhaseSolver
 from ..timesteppers import RungeKutta4
 

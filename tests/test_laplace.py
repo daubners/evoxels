@@ -6,7 +6,7 @@ import pytest
 import sympy as sp
 import sympy.vector as spv
 
-from evoxels.problem_definition import ReactionDiffusion
+from evoxels.pdes import ReactionDiffusion
 from evoxels.utils import rhs_convergence_test
 
 jax_available = importlib.util.find_spec("jax") is not None

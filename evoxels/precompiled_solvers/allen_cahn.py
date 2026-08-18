@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ..problem_definition import TwoPhaseAllenCahn
+from ..pdes import TwoPhaseAllenCahn
 from ..solvers import TimeDependentSolver
 from ..timesteppers import RungeKutta4
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ..problem_definition import CahnHilliard
+from ..pdes import CahnHilliard
 from ..solvers import TimeDependentSolver
 from ..timesteppers import PseudoSpectralIMEX
 

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import evoxels as evo
-from evoxels.problem_definition import ReactionDiffusion, TwoPhaseAllenCahn
+from evoxels.pdes import ReactionDiffusion, TwoPhaseAllenCahn
 from evoxels.solvers import TimeDependentSolver
 from evoxels.timesteppers import ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch

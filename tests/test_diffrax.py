@@ -7,7 +7,7 @@ import pytest
 
 import evoxels as evo
 from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
-from evoxels.problem_definition import (
+from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
     MultiPhaseAllenCahn,

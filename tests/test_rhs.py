@@ -3,7 +3,7 @@
 import sympy as sp
 import sympy.vector as spv
 
-from evoxels.problem_definition import (
+from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
     MultiPhaseAllenCahn,
