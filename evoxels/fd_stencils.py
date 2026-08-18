@@ -59,6 +59,10 @@ class FDStencils:
                self.grad_y_center(field)**2 + \
                self.grad_z_center(field)**2
 
+    def gradient_norm(self, field):
+        """Gradient norm at cell centers"""
+        return self.lib.sqrt(self.gradient_norm_squared(field))
+
     def laplace(self, field):
         r"""Calculate laplace based on compact 2nd order stencil.
 
