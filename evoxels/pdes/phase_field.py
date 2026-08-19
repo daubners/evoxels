@@ -102,16 +102,16 @@ class TwoPhaseAllenCahn(SemiLinearODE):
     M: float = 1.0
     force: float = 0.0
     curvature: float = 0.01
-    potential: Callable | None = None
+    potential_derivative: Callable | None = None
     bc: tuple = ('neumann','neumann','neumann')
     _fourier_symbol: Any = field(init=False, repr=False)
-    
+
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         self.initialize_boundary_conditions()
         self._fourier_symbol = -self.M * self.gab* self.k_squared()
-        if self.potential is None:
-            self.potential = lambda u, lib=None: 18 / self.eps * u * (1-u) * (1-2*u)
+        if self.potential_derivative is None:
+            self.potential_derivative = lambda u, lib=None: 18 / self.eps * u * (1-u) * (1-2*u)
 
     @property
     def order(self):
@@ -124,9 +124,9 @@ class TwoPhaseAllenCahn(SemiLinearODE):
     def _eval_potential(self, phi, lib):
         """Evaluate phasefield potential"""
         try:
-            return self.potential(phi, lib)
+            return self.potential_derivative(phi, lib)
         except TypeError:
-            return self.potential(phi)
+            return self.potential_derivative(phi)
 
     def rhs_analytic(self, t, phi):
         grad = spv.gradient(phi)
@@ -138,7 +138,7 @@ class TwoPhaseAllenCahn(SemiLinearODE):
         curv = norm_grad * spv.divergence(unit_normal)
         n_laplace = laplace - (1-self.curvature)*curv
         df_dphi = self.gab * (n_laplace - self._eval_potential(phi, sp)/(2*self.eps)) \
-                  + 3/self.eps * phi * (1-phi) * self.force
+                  + norm_grad * self.force
         return self.M * df_dphi
 
     def rhs(self, t, phi):
@@ -165,8 +165,9 @@ class TwoPhaseAllenCahn(SemiLinearODE):
         phi_pad = self.pad_bc(phi)
         laplace = self.curvature*self.vg.laplace(phi_pad)
         n_laplace = (1-self.curvature) * self.vg.normal_laplace(phi_pad)
+        norm_grad_phi = self.vg.gradient_norm(phi_pad)
         df_dphi = self.gab * (laplace + n_laplace - potential/2/self.eps)\
-                  + 3/self.eps * phi * (1-phi) * self.force
+                  + norm_grad_phi * self.force
         return self.M * df_dphi
 
 
@@ -178,7 +179,6 @@ class MultiPhaseAllenCahn(SemiLinearODE):
     M: float = 1.0
     force: float = 0.0
     curvature: float = 1.0
-    potential: str = 'well'
     fast: bool = True
     bc: tuple = ('periodic','periodic','periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
@@ -187,14 +187,8 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         """Precompute factors required by the spectral solver."""
         self.initialize_boundary_conditions()
         self._fourier_symbol = -self.M * self.gab * self.k_squared()
-        if self.potential == 'well':
-            self.pot_factor = 9 / (2*self.eps**2)
-            self.calc_potential_derivatives = self._calc_well_derivatives
-        # elif self.potential == 'obstacle':
-        #     self.pot_factor = 16 / (self.eps**2 * self.vg.lib.pi**2)
-        #     self.calc_potential_derivatives = self._calc_obstacle_derivatives
-        else:
-            raise ValueError(f"Unknown potential type: {self.potential}")
+        self.pot_factor = 9 / (2*self.eps**2)
+        self.calc_potential_derivatives = self._calc_well_derivatives
 
         if self.fast:
             self.project_to_simplex = self._sloppy_simplex_projection
@@ -255,10 +249,6 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         sum_phi_squared = self.vg.sum(phis**2, dim=0, keepdim=True)
         df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
         return self.pot_factor*df_dphi
-
-    def _calc_obstacle_derivatives(self, phis):
-        # sum_phi = self.vg.sum(phis, dim=0, keepdim=True)
-        return -self.pot_factor * phis
 
     def rhs(self, t, phis):
         r"""Multi-phase Allen-Cahn equation
