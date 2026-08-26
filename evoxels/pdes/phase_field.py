@@ -188,7 +188,6 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         self.initialize_boundary_conditions()
         self._fourier_symbol = -self.M * self.gab * self.k_squared()
         self.pot_factor = 9 / (2*self.eps**2)
-        self.calc_potential_derivatives = self._calc_well_derivatives
 
         if self.fast:
             self.project_to_simplex = self._sloppy_simplex_projection
@@ -245,7 +244,7 @@ class MultiPhaseAllenCahn(SemiLinearODE):
 
         return self.vg.lib.clip(phis - theta, min=0.0)
     
-    def _calc_well_derivatives(self, phis):
+    def _calc_multiwell_derivatives(self, phis):
         sum_phi_squared = self.vg.sum(phis**2, dim=0, keepdim=True)
         df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
         return self.pot_factor*df_dphi
@@ -280,7 +279,9 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         # dfgrad_dphi += sum_dfgrad_dphi
 
         # Potential term
-        dfpot_dphi = self.calc_potential_derivatives(phis)
+        dfpot_dphi = self._calc_multiwell_derivatives(phis)
     
         df_dphi = dfgrad_dphi + dfpot_dphi
-        return - self.M * self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
+        dphi = self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
+        # dphi += 3 / self.eps * (phia + phib) * phia * phib
+        return - self.M * dphi
