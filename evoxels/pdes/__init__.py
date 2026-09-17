@@ -1,7 +1,7 @@
 """Built-in partial differential equation models."""
 
 from .base import ODE, SemiLinearODE, SmoothedBoundaryODE
-from .phase_field import CahnHilliard, MultiPhaseAllenCahn, TwoPhaseAllenCahn
+from .phase_field import CahnHilliard, SimpleMultiPhaseAllenCahn, TwoPhaseAllenCahn
 from .reaction_diffusion import (
     CoupledReactionDiffusion,
     ReactionDiffusion,
@@ -12,7 +12,7 @@ __all__ = [
     "ODE",
     "CahnHilliard",
     "CoupledReactionDiffusion",
-    "MultiPhaseAllenCahn",
+    "SimpleMultiPhaseAllenCahn",
     "ReactionDiffusion",
     "ReactionDiffusionSBM",
     "SemiLinearODE",
