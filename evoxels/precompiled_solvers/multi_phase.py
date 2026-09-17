@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..pdes import MultiPhaseAllenCahn
+from ..pdes import SimpleMultiPhaseAllenCahn
 from ..solvers import MultiPhaseSolver
 from ..timesteppers import RungeKutta4
 
@@ -17,8 +17,7 @@ def run_multi_phase_solver(
     eps: float = 3.0,
     gab: float = 1.0,
     M: float = 1.0,
-    force: float = 0.0,
-    curvature: float = 1.0,
+    bulk_driving_forces: tuple[float, ...] | None = None,
     fast: bool = False,
     bc: tuple = ("periodic", "periodic", "periodic"),
     from_labels: bool = True,
@@ -33,13 +32,16 @@ def run_multi_phase_solver(
         voxelfields,
         fieldnames,
         backend,
-        problem_cls=MultiPhaseAllenCahn,
+        problem_cls=SimpleMultiPhaseAllenCahn,
         timestepper_cls=RungeKutta4,
         device=device,
         from_labels=from_labels,
         output_label_fieldname=output_label_fieldname,
         max_phases=max_phases,
     )
+    if bulk_driving_forces is not None and len(bulk_driving_forces) != solver.phase_count:
+        raise ValueError("bulk_driving_forces must contain one value per phase.")
+
     solver.solve(
         time_increment=time_increment,
         frames=frames,
@@ -48,8 +50,7 @@ def run_multi_phase_solver(
             "eps": eps,
             "gab": gab,
             "M": M,
-            "force": force,
-            "curvature": curvature,
+            "bulk_driving_forces": bulk_driving_forces,
             "fast": fast,
             "bc": bc,
         },

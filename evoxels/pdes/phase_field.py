@@ -172,22 +172,24 @@ class TwoPhaseAllenCahn(SemiLinearODE):
 
 
 @dataclass
-class MultiPhaseAllenCahn(SemiLinearODE):
+class SimpleMultiPhaseAllenCahn(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 3.0
     gab: float = 1.0
     M: float = 1.0
-    force: float = 0.0
-    curvature: float = 1.0
+    bulk_driving_forces: tuple[float, ...] | None = None
     fast: bool = True
     bc: tuple = ('periodic','periodic','periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
+    _bulk_driving_forces: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         self.initialize_boundary_conditions()
         self._fourier_symbol = -self.M * self.gab * self.k_squared()
         self.pot_factor = 9 / (2*self.eps**2)
+        if self.bulk_driving_forces is not None:
+            self._bulk_driving_forces = self.vg.to_backend(self.bulk_driving_forces)
 
         if self.fast:
             self.project_to_simplex = self._sloppy_simplex_projection
@@ -207,13 +209,7 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         df_dphi = []
 
         for phi in phis:
-            grad = spv.gradient(phi)
-            laplace = spv.laplacian(phi)
-            norm_grad = sp.sqrt(grad.dot(grad))
-            unit_normal = grad / norm_grad
-            curv = norm_grad * spv.divergence(unit_normal)
-
-            grad_term = -self.curvature * laplace - (1 - self.curvature) * (laplace - curv)
+            grad_term = -spv.laplacian(phi)
             pot_term = self.pot_factor * (3*phi*(sum_phi_squared - phi**2) + phi**3 - phi)
             df_dphi.append(grad_term + pot_term)
 
@@ -249,6 +245,21 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
         return self.pot_factor*df_dphi
 
+    def _bulk_driving_term(self, phis):
+        """Return pairwise bulk driving forces without an O(N**2) field tensor."""
+        if self._bulk_driving_forces is None:
+            return 0.0
+
+        forces = self._bulk_driving_forces.reshape((-1,) + (1,) * (phis.ndim - 1))
+        sum_phi = self.vg.sum(phis, dim=0, keepdim=True)
+        sum_phi2 = self.vg.sum(phis**2, dim=0, keepdim=True)
+        sum_force_phi = self.vg.sum(forces * phis, dim=0, keepdim=True)
+        sum_force_phi2 = self.vg.sum(forces * phis**2, dim=0, keepdim=True)
+        return 3 / self.eps * (
+            phis**2 * (sum_force_phi - forces * sum_phi)
+            + phis * (sum_force_phi2 - forces * sum_phi2)
+        )
+
     def rhs(self, t, phis):
         r"""Multi-phase Allen-Cahn equation
         
@@ -272,8 +283,7 @@ class MultiPhaseAllenCahn(SemiLinearODE):
 
         # Gradient term
         phi_pad = self.pad_bc(phis)
-        dfgrad_dphi = -self.curvature*self.vg.laplace(phi_pad)
-        dfgrad_dphi -= (1-self.curvature) * self.vg.normal_laplace(phi_pad)
+        dfgrad_dphi = -self.vg.laplace(phi_pad)
         # This one cancels because of pairwise interactions
         # sum_dfgrad_dphi = self.vg.sum(dfgrad_dphi, dim=0, keepdim=True)
         # dfgrad_dphi += sum_dfgrad_dphi
@@ -283,5 +293,50 @@ class MultiPhaseAllenCahn(SemiLinearODE):
     
         df_dphi = dfgrad_dphi + dfpot_dphi
         dphi = self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
-        # dphi += 3 / self.eps * (phia + phib) * phia * phib
-        return - self.M * dphi
+        return self.M * (self._bulk_driving_term(phis) - dphi)
+
+# @dataclass
+# class TestMultiPhaseAllenCahn(SimpleMultiPhaseAllenCahn):
+#     curvature: float = 1.0
+
+#     def rhs_analytic(self, t, phis):
+#         sum_phi_squared = sum(phi**2 for phi in phis)
+#         df_dphi = []
+
+#         for phi in phis:
+#             grad = spv.gradient(phi)
+#             laplace = spv.laplacian(phi)
+#             norm_grad = sp.sqrt(grad.dot(grad))
+#             unit_normal = grad / norm_grad
+#             curv = norm_grad * spv.divergence(unit_normal)
+
+#             grad_term = -self.curvature * laplace - (1 - self.curvature) * (laplace - curv)
+#             pot_term = self.pot_factor * (3*phi*(sum_phi_squared - phi**2) + phi**3 - phi)
+#             df_dphi.append(grad_term + pot_term)
+
+#         mean_df = sum(df_dphi) / len(df_dphi)
+#         return tuple(-self.M * self.gab * (df - mean_df) for df in df_dphi)
+    
+#     def _calc_multiwell_derivatives(self, phis):
+#         sum_phi_squared = self.vg.sum(phis**2, dim=0, keepdim=True)
+#         df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
+#         return self.pot_factor*df_dphi
+
+#     def rhs(self, t, phis):
+#         phis = self.project_to_simplex(phis)
+
+#         # Gradient term
+#         phi_pad = self.pad_bc(phis)
+#         dfgrad_dphi = -self.curvature*self.vg.laplace(phi_pad)
+#         dfgrad_dphi -= (1-self.curvature) * self.vg.normal_laplace(phi_pad)
+#         # This one cancels because of pairwise interactions
+#         # sum_dfgrad_dphi = self.vg.sum(dfgrad_dphi, dim=0, keepdim=True)
+#         # dfgrad_dphi += sum_dfgrad_dphi
+
+#         # Potential term
+#         dfpot_dphi = self._calc_multiwell_derivatives(phis)
+    
+#         df_dphi = dfgrad_dphi + dfpot_dphi
+#         dphi = self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
+#         # dphi += 3 / self.eps * (phia + phib) * phia * phib
+#         return - self.M * dphi

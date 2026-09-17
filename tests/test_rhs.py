@@ -1,16 +1,19 @@
 """Tests for rhs of problem definition."""
 
+import numpy as np
 import sympy as sp
 import sympy.vector as spv
 
+import evoxels as evo
 from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
-    MultiPhaseAllenCahn,
     ReactionDiffusionSBM,
+    SimpleMultiPhaseAllenCahn,
     TwoPhaseAllenCahn,
 )
 from evoxels.utils import rhs_convergence_test
+from evoxels.voxelgrid import VoxelGridTorch
 
 CS = spv.CoordSys3D('CS')
 test_fun_ch = 0.4 + 0.1 * sp.sin(2*sp.pi*CS.x)
@@ -65,12 +68,11 @@ test_funs_mpac = (
 
 def test_multiphase_allen_cahn_rhs():
     _, _, slopes, order = rhs_convergence_test(
-        ODE_class      = MultiPhaseAllenCahn,
+        ODE_class      = SimpleMultiPhaseAllenCahn,
         problem_kwargs = {
             "eps": 3.0,
             "gab": 1.0,
             "M": 1.0,
-            "curvature": 1.0,
             "bc": ('neumann', 'periodic', 'periodic'),
         },
         test_function  = test_funs_mpac,
@@ -79,6 +81,38 @@ def test_multiphase_allen_cahn_rhs():
     )
     assert all(abs(s - order) < 0.1 for s in slopes),\
         f"expected order {order}, got {slopes[0]:.2f}, {slopes[1]:.2f}, {slopes[2]:.2f}"
+
+
+def _simple_multiphase_problem(forces):
+    vf = evo.VoxelFields((1, 1, 1), domain_size=(1, 1, 1))
+    vg = VoxelGridTorch(vf.grid_info(), precision="float64", device="cpu")
+    return SimpleMultiPhaseAllenCahn(vg, eps=2.0, bulk_driving_forces=forces)
+
+
+def test_bulk_driving_term_matches_pairwise_definition():
+    phis = np.array([[[[0.2]]], [[[0.3]]], [[[0.5]]]])
+    forces = np.array([1.0, -2.0, 0.5])
+    problem = _simple_multiphase_problem(forces)
+
+    actual = problem.vg.to_numpy(problem._bulk_driving_term(problem.vg.to_backend(phis)))
+    expected = np.array([
+        sum(3 / problem.eps * (phis[a] + phis[b]) * phis[a] * phis[b] * (forces[b] - forces[a])
+            for b in range(len(forces)) if b != a)
+        for a in range(len(forces))
+    ])
+
+    assert np.allclose(actual, expected)
+    assert np.allclose(actual.sum(axis=0), 0.0)
+
+
+def test_bulk_driving_term_grows_lower_energy_phase():
+    problem = _simple_multiphase_problem((0.0, 1.0))
+    phis = np.array([[[[0.25]]], [[[0.75]]]])
+
+    bulk = problem.vg.to_numpy(problem._bulk_driving_term(problem.vg.to_backend(phis)))
+
+    assert bulk[0, 0, 0, 0] > 0.0
+    assert np.isclose(bulk[0, 0, 0, 0], -bulk[1, 0, 0, 0])
     
 
 test_fun_sbm = CS.x + (CS.x*(1-CS.x))
