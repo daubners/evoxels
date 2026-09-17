@@ -167,6 +167,13 @@ class SemiLinearODE(ODE):
             # timesteppers which use FFT call verify_fft_bc_config()
             return self.vg.rfft_k_squared()
 
+    def k_squared_fd(self):
+        """Helper to choose finite difference k^2 based on BCs."""
+        if self.bc_type[0] in {'dirichlet', 'neumann'}:
+            return self.vg.rfft_k_squared_nonperiodic_fd()
+        else:
+            return self.vg.rfft_k_squared_fd()
+
     def pad_fft_bc(self, u):
         return self._pad_fft_bc(u)
 

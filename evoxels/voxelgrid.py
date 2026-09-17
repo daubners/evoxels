@@ -124,7 +124,53 @@ class VoxelGrid(FDStencils):
         _, _, a_z = self.rfft_axes()
         kx, ky, kz = self.lib.meshgrid(a_x, a_y, a_z, indexing='ij')
         return kx**2 + ky**2 + kz**2
-    
+
+    def _fd_k_squared_from_axes(self, axes):
+        """
+        Modified wavenumber squared for the standard second-order
+        central-difference Laplacian.
+
+        k_i^2 -> 4 / dx_i^2 * sin^2(k_i dx_i / 2)
+        """
+        kx, ky, kz = self.lib.meshgrid(*axes, indexing='ij')
+        dx, dy, dz = self.spacing
+        return (
+            4.0 / dx**2 * self.lib.sin(0.5 * kx * dx)**2
+            + 4.0 / dy**2 * self.lib.sin(0.5 * ky * dy)**2
+            + 4.0 / dz**2 * self.lib.sin(0.5 * kz * dz)**2
+        )
+
+    def fft_k_squared_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for a full FFT.
+        """
+        return self._fd_k_squared_from_axes(self.fft_axes())
+
+    def rfft_k_squared_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for an rFFT along z.
+        """
+        a_x, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+
+        return self._fd_k_squared_from_axes((a_x, a_y, a_z))
+
+    def rfft_k_squared_nonperiodic_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for the FFT representation used with non-periodic x BCs.
+        """
+        if self.convention == 'cell_center':
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0], d=self.spacing[0])
+        else:   
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0]-2, d=self.spacing[0])
+        _, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+
+        return self._fd_k_squared_from_axes((a_x, a_y, a_z))
+
     def init_scalar_field(self, array):
         """Convert and pad a NumPy array for simulation."""
         field = self.to_backend(array)
