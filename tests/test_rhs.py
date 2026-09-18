@@ -83,33 +83,33 @@ def test_multiphase_allen_cahn_rhs():
         f"expected order {order}, got {slopes[0]:.2f}, {slopes[1]:.2f}, {slopes[2]:.2f}"
 
 
-def _simple_multiphase_problem(forces):
+def _simple_multiphase_problem(energies):
     vf = evo.VoxelFields((1, 1, 1), domain_size=(1, 1, 1))
     vg = VoxelGridTorch(vf.grid_info(), precision="float64", device="cpu")
-    return MultiPhaseAllenCahn(vg, eps=2.0, bulk_driving_forces=forces)
+    return MultiPhaseAllenCahn(vg, eps=2.0, bulk_energies=energies)
 
 
-def test_bulk_driving_term_matches_pairwise_definition():
+def test_bulk_energy_term_matches_pairwise_definition():
     phis = np.array([[[[0.2]]], [[[0.3]]], [[[0.5]]]])
-    forces = np.array([1.0, -2.0, 0.5])
-    problem = _simple_multiphase_problem(forces)
+    energies = np.array([1.0, -2.0, 0.5])
+    problem = _simple_multiphase_problem(energies)
 
-    actual = problem.vg.to_numpy(problem._bulk_driving_term(problem.vg.to_backend(phis)))
+    actual = problem.vg.to_numpy(problem._bulk_energy_term(problem.vg.to_backend(phis)))
     expected = np.array([
-        sum(3 / problem.eps * (phis[a] + phis[b]) * phis[a] * phis[b] * (forces[b] - forces[a])
-            for b in range(len(forces)) if b != a)
-        for a in range(len(forces))
+        sum(3 / problem.eps * (phis[a] + phis[b]) * phis[a] * phis[b] * (energies[b] - energies[a])
+            for b in range(len(energies)) if b != a)
+        for a in range(len(energies))
     ])
 
     assert np.allclose(actual, expected)
     assert np.allclose(actual.sum(axis=0), 0.0)
 
 
-def test_bulk_driving_term_grows_lower_energy_phase():
+def test_bulk_energy_term_grows_lower_energy_phase():
     problem = _simple_multiphase_problem((0.0, 1.0))
     phis = np.array([[[[0.25]]], [[[0.75]]]])
 
-    bulk = problem.vg.to_numpy(problem._bulk_driving_term(problem.vg.to_backend(phis)))
+    bulk = problem.vg.to_numpy(problem._bulk_energy_term(problem.vg.to_backend(phis)))
 
     assert bulk[0, 0, 0, 0] > 0.0
     assert np.isclose(bulk[0, 0, 0, 0], -bulk[1, 0, 0, 0])

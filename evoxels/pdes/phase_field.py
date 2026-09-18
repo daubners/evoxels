@@ -177,19 +177,19 @@ class MultiPhaseAllenCahn(SemiLinearODE):
     eps: float = 3.0
     gab: float = 1.0
     M: float = 1.0
-    bulk_driving_forces: tuple[float, ...] | None = None
+    bulk_energies: tuple[float, ...] | None = None
     fast: bool = True
     bc: tuple = ('periodic','periodic','periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
-    _bulk_driving_forces: Any = field(init=False, repr=False, default=None)
+    _bulk_energies: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
         """Precompute factors required by the spectral solver."""
         self.initialize_boundary_conditions()
         self._fourier_symbol = -self.M * self.gab * self.k_squared()
         self.pot_factor = 9 / (2*self.eps**2)
-        if self.bulk_driving_forces is not None:
-            self._bulk_driving_forces = self.vg.to_backend(self.bulk_driving_forces)
+        if self.bulk_energies is not None:
+            self._bulk_energies = self.vg.to_backend(self.bulk_energies)
 
         if self.fast:
             self.project_to_simplex = self._sloppy_simplex_projection
@@ -245,18 +245,18 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         df_dphi = 3*phis*(sum_phi_squared - phis**2) + phis**3 - phis
         return self.pot_factor*df_dphi
 
-    def _bulk_driving_term(self, phis):
+    def _bulk_energy_term(self, phis):
         """Return pairwise bulk driving forces without an O(N**2) field tensor."""
-        if self._bulk_driving_forces is None:
+        if self._bulk_energies is None:
             return 0.0
 
-        forces = self._bulk_driving_forces.reshape((-1,) + (1,) * (phis.ndim - 1))
+        energies = self._bulk_energies.reshape((-1,) + (1,) * (phis.ndim - 1))
         sum_phi2 = self.vg.sum(phis**2, dim=0, keepdim=True)
-        sum_force_phi = self.vg.sum(forces * phis, dim=0, keepdim=True)
-        sum_force_phi2 = self.vg.sum(forces * phis**2, dim=0, keepdim=True)
+        sum_energy_phi = self.vg.sum(energies * phis, dim=0, keepdim=True)
+        sum_energy_phi2 = self.vg.sum(energies * phis**2, dim=0, keepdim=True)
         return 3 / self.eps * (
-            phis**2 * (sum_force_phi - forces)
-            + phis * (sum_force_phi2 - forces * sum_phi2)
+            phis**2 * (sum_energy_phi - energies)
+            + phis * (sum_energy_phi2 - energies * sum_phi2)
         )
 
     def rhs(self, t, phis):
@@ -266,10 +266,10 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         :math:`\alpha=1,\ldots,N`, governed by the multiphase-field model.
         :math:`M` denotes the mobility which is the same for all phase-pairs,
         :math:`\epsilon` controls the diffuse interface width,
-        :math:`\gamma` denotes the interfacial energy.
-        The laplacian leads to a phase evolution driven by
-        curvature minimization which can be controlled by setting
-        ``curvature=`` in range :math:`[0,1]`.
+        :math:`\gamma` denotes the interfacial energy. ``bulk_energies``
+        supplies one bulk free-energy density per phase; the effective
+        pairwise driving force is :math:`f_\beta - f_\alpha`, so lower-energy
+        phases grow.
 
         Args:
             t (float): Current time.
@@ -292,7 +292,7 @@ class MultiPhaseAllenCahn(SemiLinearODE):
     
         df_dphi = dfgrad_dphi + dfpot_dphi
         dphi = self.gab * (df_dphi - self.vg.mean(df_dphi, dim=0, keepdim=True))
-        return self.M * (self._bulk_driving_term(phis) - dphi)
+        return self.M * (self._bulk_energy_term(phis) - dphi)
 
 # @dataclass
 # class CurvatureMultiPhaseAllenCahn(MultiPhaseAllenCahn):

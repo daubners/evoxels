@@ -17,7 +17,7 @@ def run_multi_phase_solver(
     eps: float = 3.0,
     gab: float = 1.0,
     M: float = 1.0,
-    bulk_driving_forces: tuple[float, ...] | None = None,
+    bulk_energies: tuple[float, ...] | None = None,
     fast: bool = False,
     bc: tuple = ("periodic", "periodic", "periodic"),
     from_labels: bool = True,
@@ -39,8 +39,8 @@ def run_multi_phase_solver(
         output_label_fieldname=output_label_fieldname,
         max_phases=max_phases,
     )
-    if bulk_driving_forces is not None and len(bulk_driving_forces) != solver.phase_count:
-        raise ValueError("bulk_driving_forces must contain one value per phase.")
+    if bulk_energies is not None and len(bulk_energies) != solver.phase_count:
+        raise ValueError("bulk_energies must contain one value per phase.")
 
     solver.solve(
         time_increment=time_increment,
@@ -50,7 +50,7 @@ def run_multi_phase_solver(
             "eps": eps,
             "gab": gab,
             "M": M,
-            "bulk_driving_forces": bulk_driving_forces,
+            "bulk_energies": bulk_energies,
             "fast": fast,
             "bc": bc,
         },

@@ -49,7 +49,7 @@ def test_precompiled_multi_phase_solver_labels_mode():
     assert set(np.unique(vf.fields["labels"])).issubset({0, 1})
 
 
-def test_precompiled_multi_phase_solver_validates_bulk_driving_forces():
+def test_precompiled_multi_phase_solver_validates_bulk_energies():
     vf = evo.VoxelFields((4, 4, 1))
     labels = np.zeros(vf.shape, dtype=np.int32)
     labels[2:, :, :] = 1
@@ -61,7 +61,7 @@ def test_precompiled_multi_phase_solver_validates_bulk_driving_forces():
             "labels",
             backend="torch",
             device="cpu",
-            bulk_driving_forces=(0.0,),
+            bulk_energies=(0.0,),
         )
 
 @pytest.mark.skipif(not jax_available, reason="jax not installed")
