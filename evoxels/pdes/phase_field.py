@@ -251,12 +251,11 @@ class SimpleMultiPhaseAllenCahn(SemiLinearODE):
             return 0.0
 
         forces = self._bulk_driving_forces.reshape((-1,) + (1,) * (phis.ndim - 1))
-        sum_phi = self.vg.sum(phis, dim=0, keepdim=True)
         sum_phi2 = self.vg.sum(phis**2, dim=0, keepdim=True)
         sum_force_phi = self.vg.sum(forces * phis, dim=0, keepdim=True)
         sum_force_phi2 = self.vg.sum(forces * phis**2, dim=0, keepdim=True)
         return 3 / self.eps * (
-            phis**2 * (sum_force_phi - forces * sum_phi)
+            phis**2 * (sum_force_phi - forces)
             + phis * (sum_force_phi2 - forces * sum_phi2)
         )
 
