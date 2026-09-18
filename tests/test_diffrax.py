@@ -10,7 +10,7 @@ from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
 from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
-    SimpleMultiPhaseAllenCahn,
+    MultiPhaseAllenCahn,
     ReactionDiffusion,
     ReactionDiffusionSBM,
     TwoPhaseAllenCahn,
@@ -98,7 +98,7 @@ def test_reaction_diffusion_sbm_supports_all_step_dt_adapters(stepper_cls):
         lambda vg, shape: _scalar_state(vg,
             0.5 + 0.05 * np.cos(np.indices(shape, dtype=np.float32)[0]),
         )),
-     (  SimpleMultiPhaseAllenCahn,
+     (  MultiPhaseAllenCahn,
         {"eps": 3.0},
         lambda vg, shape: _multifield_state(vg,
             (np.full(shape, 0.2, dtype=np.float32),

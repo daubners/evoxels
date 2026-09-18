@@ -8,8 +8,8 @@ import evoxels as evo
 from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
+    MultiPhaseAllenCahn,
     ReactionDiffusionSBM,
-    SimpleMultiPhaseAllenCahn,
     TwoPhaseAllenCahn,
 )
 from evoxels.utils import rhs_convergence_test
@@ -68,7 +68,7 @@ test_funs_mpac = (
 
 def test_multiphase_allen_cahn_rhs():
     _, _, slopes, order = rhs_convergence_test(
-        ODE_class      = SimpleMultiPhaseAllenCahn,
+        ODE_class      = MultiPhaseAllenCahn,
         problem_kwargs = {
             "eps": 3.0,
             "gab": 1.0,
@@ -86,7 +86,7 @@ def test_multiphase_allen_cahn_rhs():
 def _simple_multiphase_problem(forces):
     vf = evo.VoxelFields((1, 1, 1), domain_size=(1, 1, 1))
     vg = VoxelGridTorch(vf.grid_info(), precision="float64", device="cpu")
-    return SimpleMultiPhaseAllenCahn(vg, eps=2.0, bulk_driving_forces=forces)
+    return MultiPhaseAllenCahn(vg, eps=2.0, bulk_driving_forces=forces)
 
 
 def test_bulk_driving_term_matches_pairwise_definition():

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..pdes import SimpleMultiPhaseAllenCahn
+from ..pdes import MultiPhaseAllenCahn
 from ..solvers import MultiPhaseSolver
 from ..timesteppers import RungeKutta4
 
@@ -32,7 +32,7 @@ def run_multi_phase_solver(
         voxelfields,
         fieldnames,
         backend,
-        problem_cls=SimpleMultiPhaseAllenCahn,
+        problem_cls=MultiPhaseAllenCahn,
         timestepper_cls=RungeKutta4,
         device=device,
         from_labels=from_labels,

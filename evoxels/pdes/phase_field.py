@@ -172,7 +172,7 @@ class TwoPhaseAllenCahn(SemiLinearODE):
 
 
 @dataclass
-class SimpleMultiPhaseAllenCahn(SemiLinearODE):
+class MultiPhaseAllenCahn(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 3.0
     gab: float = 1.0
@@ -295,7 +295,7 @@ class SimpleMultiPhaseAllenCahn(SemiLinearODE):
         return self.M * (self._bulk_driving_term(phis) - dphi)
 
 # @dataclass
-# class TestMultiPhaseAllenCahn(SimpleMultiPhaseAllenCahn):
+# class CurvatureMultiPhaseAllenCahn(MultiPhaseAllenCahn):
 #     curvature: float = 1.0
 
 #     def rhs_analytic(self, t, phis):
