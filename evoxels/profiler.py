@@ -1,10 +1,12 @@
-import numpy as np
-import psutil
 import os
+import shutil
 import subprocess
 import tracemalloc
-import shutil
 from abc import ABC, abstractmethod
+
+import numpy as np
+import psutil
+
 
 class MemoryProfiler(ABC):
     """Base interface for tracking host and device memory usage."""
@@ -24,7 +26,7 @@ class MemoryProfiler(ABC):
                 encoding='utf-8'
             )
             return int(output.strip().split('\n')[0])
-        except Exception as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             print(f"Error tracking memory with nvidia-smi: {e}")
 
     def update_memory_stats(self):
@@ -39,7 +41,6 @@ class MemoryProfiler(ABC):
     @abstractmethod
     def print_memory_stats(self, start: float, end: float, iters: int):
         """Print profiling summary after a simulation run."""
-        pass
 
 class TorchMemoryProfiler(MemoryProfiler):
     def __init__(self, device):

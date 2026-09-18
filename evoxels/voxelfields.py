@@ -18,12 +18,14 @@
 # Also lass dich vom Charme dieses kantigen Ortes verzaubern,
 # wo jedes Voxel seinen Platz findet.
 
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
-import numpy as np
-from typing import Tuple
 import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import Slider
+
 from .voxelgrid import Grid
+
 
 class VoxelFields:
     """Manage 3D voxel grids for simulation, visualization, and I/O.
@@ -62,7 +64,7 @@ class VoxelFields:
         >>> x, y, z = vf.plot_slice('temperature', 10)
     """
 
-    def __init__(self, shape: Tuple[int, int, int], domain_size=(1, 1, 1), convention='cell_center'):
+    def __init__(self, shape: tuple[int, int, int], domain_size=(1, 1, 1), convention='cell_center'):
         """Create a voxel grid with ``shape`` cells."""
         if not (
             isinstance(shape, (list, tuple))
@@ -155,7 +157,7 @@ class VoxelFields:
         else:
             self.set_field(name, np.zeros(self.shape))
 
-    def set_voxel_sphere(self, name: str, center, radius, label: int | float = 1):
+    def set_voxel_sphere(self, name: str, center, radius, label: float = 1):
         """Create a voxelized representation of a sphere in 3D
         
         Fill voxels within given ``radius`` around the given ``center``
@@ -180,14 +182,14 @@ class VoxelFields:
             average /= ((self.Nx - 1) * self.Ny * self.Nz)
         return average
     
-    def axes(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def axes(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ Returns the 1D coordinate arrays along each axis. """
         return tuple(
             np.arange(0, n, dtype=self.precision) * self.spacing[i] + self.origin[i]
             for i, n in enumerate(self.shape)
         )
     
-    def meshgrid(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def meshgrid(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ Returns full 3D mesh grids for each axis. """
         ax = self.axes()
         # indexing='ij' makes Ax[i,j,k] = x-coordinate at (i,j,k), etc.

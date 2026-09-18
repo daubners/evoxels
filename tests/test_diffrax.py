@@ -4,9 +4,10 @@ import importlib.util
 
 import numpy as np
 import pytest
+
 import evoxels as evo
 from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
-from evoxels.problem_definition import (
+from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
     MultiPhaseAllenCahn,
@@ -15,11 +16,11 @@ from evoxels.problem_definition import (
     TwoPhaseAllenCahn,
 )
 from evoxels.timesteppers import (
+    RKC1,
+    RKC2,
     ExponentialEuler,
     ForwardEuler,
     PseudoSpectralIMEX,
-    RKC1,
-    RKC2,
     RungeKutta4,
 )
 from evoxels.voxelgrid import VoxelGridJax

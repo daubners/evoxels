@@ -1,17 +1,19 @@
-import numpy as np
 import warnings
 from dataclasses import dataclass
-from typing import Tuple, Any
-from .fd_stencils import FDStencils
+from typing import Any
+
+import numpy as np
+
 from .boundary_conditions import CellCenteredBCs, StaggeredXBCs
+from .fd_stencils import FDStencils
 
 
 @dataclass
 class Grid:
     """Handles most basic properties"""
-    shape: Tuple[int, int, int]
-    origin: Tuple[float, float, float]
-    spacing: Tuple[float, float, float]
+    shape: tuple[int, int, int]
+    origin: tuple[float, float, float]
+    spacing: tuple[float, float, float]
     convention: str
 
 
@@ -76,25 +78,25 @@ class VoxelGrid(FDStencils):
         """Set ``field[index]`` to ``value`` and return ``field``."""
         raise NotImplementedError
     
-    def axes(self) -> Tuple[Any, ...]:
+    def axes(self) -> tuple[Any, ...]:
         """ Returns the 1D coordinate arrays along each axis. """
         return tuple(self.lib.arange(0, n) * self.spacing[i] + self.origin[i]
                      for i, n in enumerate(self.shape))
     
-    def fft_axes(self) -> Tuple[Any, ...]:
+    def fft_axes(self) -> tuple[Any, ...]:
         return tuple(2 * self.lib.pi * self.lib.fft.fftfreq(points, step)
                      for points, step in zip(self.shape, self.spacing))
     
-    def rfft_axes(self) -> Tuple[Any, ...]:
+    def rfft_axes(self) -> tuple[Any, ...]:
         return tuple(2 * self.lib.pi * self.lib.fft.rfftfreq(points, step)
                      for points, step in zip(self.shape, self.spacing))
     
-    def meshgrid(self) -> Tuple[Any, ...]:
+    def meshgrid(self) -> tuple[Any, ...]:
         """ Returns full 3D mesh grids for each axis. """
         ax = self.axes()
         return tuple(self.lib.meshgrid(*ax, indexing='ij'))
     
-    def fft_mesh(self) -> Tuple[Any, ...]:
+    def fft_mesh(self) -> tuple[Any, ...]:
         fft_axes = self.fft_axes()
         return tuple(self.lib.meshgrid(*fft_axes, indexing='ij'))
     
@@ -122,7 +124,53 @@ class VoxelGrid(FDStencils):
         _, _, a_z = self.rfft_axes()
         kx, ky, kz = self.lib.meshgrid(a_x, a_y, a_z, indexing='ij')
         return kx**2 + ky**2 + kz**2
-    
+
+    def _fd_k_squared_from_axes(self, axes):
+        """
+        Modified wavenumber squared for the standard second-order
+        central-difference Laplacian.
+
+        k_i^2 -> 4 / dx_i^2 * sin^2(k_i dx_i / 2)
+        """
+        kx, ky, kz = self.lib.meshgrid(*axes, indexing='ij')
+        dx, dy, dz = self.spacing
+        return (
+            4.0 / dx**2 * self.lib.sin(0.5 * kx * dx)**2
+            + 4.0 / dy**2 * self.lib.sin(0.5 * ky * dy)**2
+            + 4.0 / dz**2 * self.lib.sin(0.5 * kz * dz)**2
+        )
+
+    def fft_k_squared_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for a full FFT.
+        """
+        return self._fd_k_squared_from_axes(self.fft_axes())
+
+    def rfft_k_squared_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for an rFFT along z.
+        """
+        a_x, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+
+        return self._fd_k_squared_from_axes((a_x, a_y, a_z))
+
+    def rfft_k_squared_nonperiodic_fd(self):
+        """
+        Modified k^2 matching the second-order FD Laplacian
+        for the FFT representation used with non-periodic x BCs.
+        """
+        if self.convention == 'cell_center':
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0], d=self.spacing[0])
+        else:   
+            a_x = 2*self.lib.pi*self.lib.fft.fftfreq(2*self.shape[0]-2, d=self.spacing[0])
+        _, a_y, _ = self.fft_axes()
+        _, _, a_z = self.rfft_axes()
+
+        return self._fd_k_squared_from_axes((a_x, a_y, a_z))
+
     def init_scalar_field(self, array):
         """Convert and pad a NumPy array for simulation."""
         field = self.to_backend(array)

@@ -1,13 +1,18 @@
-from dataclasses import dataclass
-from typing import Callable, Any, Type
-from abc import ABC, abstractmethod
-from timeit import default_timer as timer
+from __future__ import annotations
+
 import sys
 import warnings
-import numpy as np
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from timeit import default_timer as timer
+from typing import Any, Callable
+
 import matplotlib.pyplot as plt
-from .problem_definition import ODE
+import numpy as np
+
+from .pdes import ODE
 from .timesteppers import TimeStepper
+
 
 @dataclass
 class BaseSolver(ABC):
@@ -15,23 +20,23 @@ class BaseSolver(ABC):
     vf: Any  # VoxelFields object
     fieldnames: str | list[str]
     backend: str
-    problem_cls: Type[ODE] | None = None
-    timestepper_cls: Type[TimeStepper] | None = None
+    problem_cls: type[ODE] | None = None
+    timestepper_cls: type[TimeStepper] | None = None
     step_fn: Callable | None = None
     device: str='cuda'
 
     def __post_init__(self):
         """Initialize backend specific components."""
         if self.backend == 'torch':
-            from .voxelgrid import VoxelGridTorch
             from .profiler import TorchMemoryProfiler
+            from .voxelgrid import VoxelGridTorch
             grid = self.vf.grid_info()
             self.vg = VoxelGridTorch(grid, precision=self.vf.precision, device=self.device)
             self.profiler = TorchMemoryProfiler(self.vg.device)
 
         elif self.backend == 'jax':
-            from .voxelgrid import VoxelGridJax
             from .profiler import JAXMemoryProfiler
+            from .voxelgrid import VoxelGridJax
             self.vg = VoxelGridJax(self.vf.grid_info(), precision=self.vf.precision)
             self.profiler = JAXMemoryProfiler()
         else:
@@ -176,15 +181,15 @@ class BaseSolver(ABC):
             self._plot_frame(u, time, colormap, plot_bounds)
             try:
                 from IPython.display import display
-                if not hasattr(self, "_disp"):
-                    self._disp = display(self._fig, display_id=True)
-                    if not hasattr(self, "_closed"):
-                        plt.close(self._fig)
-                        self._closed = True
-                else:
-                    self._disp.update(self._fig)
-            except Exception:
-                pass
+            except ImportError:
+                return
+            if not hasattr(self, "_disp"):
+                self._disp = display(self._fig, display_id=True)
+                if not hasattr(self, "_closed"):
+                    plt.close(self._fig)
+                    self._closed = True
+            else:
+                self._disp.update(self._fig)
 
 @dataclass
 class TimeDependentSolver(BaseSolver):
@@ -283,7 +288,7 @@ class MultiPhaseSolver(TimeDependentSolver):
             self.phase_labels = uniq
             self.phase_count = int(uniq.size)
         else:
-            self.phase_count = int(len(self.fieldnames))
+            self.phase_count = len(self.fieldnames)
 
         if self.phase_count > self.max_phases:
             self._warn_too_many_phases_and_exit(self.phase_count)

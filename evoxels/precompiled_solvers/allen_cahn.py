@@ -1,7 +1,11 @@
-from ..problem_definition import TwoPhaseAllenCahn
+from __future__ import annotations
+
+from typing import Callable
+
+from ..pdes import TwoPhaseAllenCahn
 from ..solvers import TimeDependentSolver
 from ..timesteppers import RungeKutta4
-from typing import Callable
+
 
 def run_allen_cahn_solver(
     voxelfields,
@@ -17,7 +21,8 @@ def run_allen_cahn_solver(
     M: float = 1.0,
     force: float = 0.0,
     curvature: float = 0.01,
-    potential: Callable | None = None,
+    potential_derivative: Callable | None = None,
+    bc: tuple = ("neumann", "neumann", "neumann"),
     vtk_out: bool = False,
     verbose: bool = True,
     plot_bounds = None,
@@ -42,7 +47,8 @@ def run_allen_cahn_solver(
                         "M": M,
                         "force": force,
                         "curvature": curvature,
-                        "potential": potential},
+                        "potential_derivative": potential_derivative,
+                        "bc": bc},
         jit=jit,
         verbose=verbose,
         vtk_out=vtk_out,

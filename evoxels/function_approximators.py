@@ -23,6 +23,7 @@ except ImportError:
 
 import dataclasses
 
+
 @dataclasses.dataclass
 class DiffusionLegendrePolynomials:
     max_degree: int

@@ -1,7 +1,11 @@
-from ..problem_definition import CahnHilliard
+from __future__ import annotations
+
+from typing import Callable
+
+from ..pdes import CahnHilliard
 from ..solvers import TimeDependentSolver
 from ..timesteppers import PseudoSpectralIMEX
-from typing import Callable
+
 
 def run_cahn_hilliard_solver(
     voxelfields,
@@ -15,6 +19,7 @@ def run_cahn_hilliard_solver(
     eps: float = 3.0,
     diffusivity: float = 1.0,
     mu_hom: Callable | None = None,
+    bc: tuple = ("periodic", "periodic", "periodic"),
     vtk_out: bool = False,
     verbose: bool = True,
     plot_bounds = None,
@@ -34,7 +39,7 @@ def run_cahn_hilliard_solver(
         time_increment=time_increment,
         frames=frames,
         max_iters=max_iters,
-        problem_kwargs={"eps": eps, "D": diffusivity, "mu_hom": mu_hom},
+        problem_kwargs={"eps": eps, "D": diffusivity, "mu_hom": mu_hom, "bc": bc},
         jit=jit,
         verbose=verbose,
         vtk_out=vtk_out,

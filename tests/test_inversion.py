@@ -1,11 +1,13 @@
 """Test inversion model class"""
 
 import importlib.util
+
 import numpy as np
 import pytest
+
 import evoxels as evo
 from evoxels.inversion import InversionModel
-from evoxels.problem_definition import CahnHilliard
+from evoxels.pdes import CahnHilliard
 from evoxels.timesteppers import PseudoSpectralIMEX
 
 diffrax_available = importlib.util.find_spec("diffrax") is not None

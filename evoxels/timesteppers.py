@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
-from .problem_definition import ODE, SemiLinearODE
+
+from .pdes import ODE, SemiLinearODE
 
 State = Any  # e.g. torch.Tensor or jax.Array
 
@@ -12,7 +13,6 @@ class TimeStepper(ABC):
     @abstractmethod
     def order(self) -> int:
         """Temporal order of accuracy."""
-        pass
 
     def step(self, t: float, u: State) -> State:
         """
@@ -29,7 +29,6 @@ class TimeStepper(ABC):
     @abstractmethod
     def step_dt(self, t: float, dt: float, u: State) -> State:
         """Take one timestep from ``t`` to ``t + dt``."""
-        pass
 
 
 @dataclass(eq=False)
