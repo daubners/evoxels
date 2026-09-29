@@ -19,8 +19,8 @@ Is a pixelated mystery.
 
 Mountains rise in jagged peaks,
 Rivers flow in blocky streaks.
-So embrace the charm of this edgy place,
-Where every voxel finds its space
+So embrace the charm of this edgy space,
+Where every voxel finds its place
 ```
 
 ## Description
