@@ -2,12 +2,14 @@
 
 import importlib.util
 
+import numpy as np
 import pytest
 import sympy as sp
 import sympy.vector as spv
 
 from evoxels.pdes import ReactionDiffusion
 from evoxels.utils import rhs_convergence_test
+from evoxels.voxelgrid import Grid, VoxelGridTorch
 
 jax_available = importlib.util.find_spec("jax") is not None
 
@@ -31,6 +33,17 @@ def test_periodic_laplace_torch():
         backend       = 'torch'
     )
     assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
+
+
+def test_corner_gradients_of_linear_field():
+    grid = Grid((3, 4, 5), (0, 0, 0), (2, 3, 4), 'cell_center')
+    vg = VoxelGridTorch(grid, precision='float64', device='cpu')
+    i, j, k = np.indices(grid.shape)
+    field = vg.to_backend((2 * i + 6 * j + 12 * k)[None])
+
+    assert np.allclose(vg.to_numpy(vg.grad_x_corner(field)), 1)
+    assert np.allclose(vg.to_numpy(vg.grad_y_corner(field)), 2)
+    assert np.allclose(vg.to_numpy(vg.grad_z_corner(field)), 3)
 
 @pytest.mark.skipif(not jax_available, reason="jax not installed")
 def test_periodic_laplace_jax():

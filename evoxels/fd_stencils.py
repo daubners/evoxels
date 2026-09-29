@@ -41,6 +41,33 @@ class FDStencils:
         """Gradient at face position staggered in z"""
         return (field[:,:,:,1:] - field[:,:,:,:-1]) * self.div_dx[2]
 
+    def grad_x_corner(self, field):
+        """Gradient in x at cell corners of the rotated staggered grid."""
+        return 0.25 * (
+              field[:, 1: , 1: , 1:] + field[:, 1: , 1: , :-1]
+            + field[:, 1: , :-1, 1:] + field[:, 1: , :-1, :-1]
+            - field[:, :-1, 1: , 1:] - field[:, :-1, 1: , :-1]
+            - field[:, :-1, :-1, 1:] - field[:, :-1, :-1, :-1]
+        ) * self.div_dx[0]
+
+    def grad_y_corner(self, field):
+        """Gradient in y at cell corners of the rotated staggered grid."""
+        return 0.25 * (
+              field[:, 1: , 1: , 1:] + field[:, 1: , 1: , :-1]
+            + field[:, :-1, 1: , 1:] + field[:, :-1, 1: , :-1]
+            - field[:, 1: , :-1, 1:] - field[:, 1: , :-1, :-1]
+            - field[:, :-1, :-1, 1:] - field[:, :-1, :-1, :-1]
+        ) * self.div_dx[1]
+
+    def grad_z_corner(self, field):
+        """Gradient in z at cell corners of the rotated staggered grid."""
+        return 0.25 * (
+              field[:, 1: , 1:, 1: ] + field[:, 1: , :-1, 1: ]
+            + field[:, :-1, 1:, 1: ] + field[:, :-1, :-1, 1: ]
+            - field[:, 1: , 1:, :-1] - field[:, 1: , :-1, :-1]
+            - field[:, :-1, 1:, :-1] - field[:, :-1, :-1, :-1]
+        ) * self.div_dx[2]
+
     def grad_x_center(self, field):
         """Gradient in x at cell center"""
         return 0.5 * (field[RIGHT] - field[LEFT]) * self.div_dx[0]

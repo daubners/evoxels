@@ -5,8 +5,8 @@
 
 # Mountains rise in jagged peaks,
 # Rivers flow in blocky streaks.
-# So embrace the charm of this edgy place,
-# Where every voxel finds its space
+# So embrace the charm of this edgy space,
+# Where every voxel finds its place
 
 # In einer Welt aus Würfeln und Blöcken,
 # in der die Realität in Voxelform erscheint,
@@ -54,8 +54,6 @@ class VoxelFields:
             Coordinates of the (0, 0, 0) corner for cell-centered or staggered grids.
         convention (str): Either 'cell_center' or 'staggered_x'.
         precision (type): NumPy floating-point type for grid coordinates.
-        grid (tuple[np.ndarray, np.ndarray, np.ndarray] or None):
-            Meshgrid arrays (x, y, z) once created by `add_grid()`, else None.
         fields (dict[str, np.ndarray]): Mapping field names to 3D arrays.
 
     Example:
@@ -94,7 +92,6 @@ class VoxelFields:
 
         if (np.max(self.spacing)/np.min(self.spacing) > 10):
             warnings.warn("Simulations become very questionable for largely different spacings e.g. dz >> dx.")
-        self.grid = None
         self.fields = {}
 
     @property
