@@ -321,4 +321,28 @@ class VoxelFields:
             fig.canvas.draw_idle()
 
         ax_slider.on_changed(update)
+
+        def move(delta):
+            ax_slider.set_val(np.clip(
+                round(ax_slider.val) + delta, 0, field.shape[0] - 1
+            ))
+
+        def on_key(event):
+            steps = {"right": 1, "up": 1, "left": -1, "down": -1,
+                     "pageup": 10, "pagedown": -10}
+            if event.key in steps:
+                move(steps[event.key])
+            elif event.key == "home":
+                ax_slider.set_val(0)
+            elif event.key == "end":
+                ax_slider.set_val(field.shape[0] - 1)
+
+        def on_scroll(event):
+            if event.inaxes is ax:
+                move(1 if event.button == "up" else -1)
+
+        fig.canvas.mpl_connect("key_press_event", on_key)
+        fig.canvas.mpl_connect("scroll_event", on_scroll)
+        fig.canvas.capture_scroll = True
+
         return ax_slider
