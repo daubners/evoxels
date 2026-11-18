@@ -18,6 +18,8 @@
 # Also lass dich vom Charme dieses kantigen Ortes verzaubern,
 # wo jedes Voxel seinen Platz findet.
 
+from __future__ import annotations
+
 import warnings
 
 import matplotlib.pyplot as plt
@@ -192,7 +194,7 @@ class VoxelFields:
         # indexing='ij' makes Ax[i,j,k] = x-coordinate at (i,j,k), etc.
         return tuple(np.meshgrid(*ax, indexing='ij'))
 
-    def export_to_vtk(self, filename="output.vtk", field_names=None):
+    def export_to_vtk(self, field_names=None, filename="output.vtk"):
         """
         Exports fields to a VTK file for visualization (e.g. VisIt or ParaView).
 
@@ -211,6 +213,20 @@ class VoxelFields:
         for name in names:
             grid.cell_data[name] = self.fields[name].flatten(order="F")  # Fortran order flattening
         grid.save(filename)
+
+    def export_to_npy(self, field_name: str, filename: str | None = None):
+        """
+        Save a single field as a .npy array (NumPy's binary format).
+
+        Args:
+            field_name (str): Name of the field in self.fields to export.
+            filename (str | None): Output filename. Defaults to "<field_name>.npy".
+        """
+        if field_name not in self.fields:
+            raise KeyError(f"Field '{field_name}' not found. Available: {list(self.fields.keys())}")
+        if filename is None:
+            filename = f"{field_name}.npy"
+        np.save(filename, self.fields[field_name])
 
     def plot_slice(self, fieldname, slice_index, direction='z', colormap='viridis', value_bounds=None):
         """

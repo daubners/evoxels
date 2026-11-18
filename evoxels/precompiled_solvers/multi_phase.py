@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..pdes import MultiPhaseAllenCahn
+from ..pdes import MultiWellAllenCahn
 from ..solvers import MultiPhaseSolver
 from ..timesteppers import RungeKutta4
 
@@ -23,7 +23,7 @@ def run_multi_phase_solver(
     from_labels: bool = True,
     output_label_fieldname: str | None = None,
     max_phases: int = 10,
-    vtk_out: bool = False,
+    export: str | bool = False,
     verbose: bool = True,
     plot_bounds=None,
 ):
@@ -32,7 +32,7 @@ def run_multi_phase_solver(
         voxelfields,
         fieldnames,
         backend,
-        problem_cls=MultiPhaseAllenCahn,
+        problem_cls=MultiWellAllenCahn,
         timestepper_cls=RungeKutta4,
         device=device,
         from_labels=from_labels,
@@ -56,6 +56,6 @@ def run_multi_phase_solver(
         },
         jit=jit,
         verbose=verbose,
-        vtk_out=vtk_out,
+        export=export,
         plot_bounds=plot_bounds,
     )

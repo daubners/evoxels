@@ -7,8 +7,9 @@ import sympy.vector as spv
 import evoxels as evo
 from evoxels.pdes import (
     CahnHilliard,
+    CahnHilliardSBM,
     CoupledReactionDiffusion,
-    MultiPhaseAllenCahn,
+    MultiWellAllenCahn,
     ReactionDiffusionSBM,
     TwoPhaseAllenCahn,
 )
@@ -28,6 +29,22 @@ def test_Cahn_Hilliard_rhs():
     )
     assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
 
+
+test_fun_ch_sbm = 0.4 + 0.1 * sp.sin(2*sp.pi*CS.x) * sp.cos(4*sp.pi*CS.y)**3
+mask_fun_ch_sbm = 0.5 + 0.3*sp.cos(4*sp.pi*CS.x) * sp.cos(2*sp.pi*CS.y)
+
+
+def test_cahn_hilliard_smoothed_boundary_rhs():
+    _, _, slope, order = rhs_convergence_test(
+        ODE_class=CahnHilliardSBM,
+        problem_kwargs={"D": 1.0, "bc_flux": 0},
+        test_function=test_fun_ch_sbm,
+        mask_function=mask_fun_ch_sbm,
+        convention="cell_center",
+        dtype="float32",
+        powers=np.array([5, 6, 7]),
+    )
+    assert abs(slope - order) < 0.1, f"expected order {order}, got {slope:.2f}"
 # Construct test function which fulfills zero flux BC
 # and has significant curvature in the domain
 test_fun_ac = 0.5 + 0.3 * sp.cos(4*sp.pi*CS.x)\
@@ -68,7 +85,7 @@ test_funs_mpac = (
 
 def test_multiphase_allen_cahn_rhs():
     _, _, slopes, order = rhs_convergence_test(
-        ODE_class      = MultiPhaseAllenCahn,
+        ODE_class      = MultiWellAllenCahn,
         problem_kwargs = {
             "eps": 3.0,
             "gab": 1.0,
@@ -86,7 +103,7 @@ def test_multiphase_allen_cahn_rhs():
 def _simple_multiphase_problem(energies):
     vf = evo.VoxelFields((1, 1, 1), domain_size=(1, 1, 1))
     vg = VoxelGridTorch(vf.grid_info(), precision="float64", device="cpu")
-    return MultiPhaseAllenCahn(vg, eps=2.0, bulk_energies=energies)
+    return MultiWellAllenCahn(vg, eps=2.0, bulk_energies=energies)
 
 
 def test_bulk_energy_term_matches_pairwise_definition():

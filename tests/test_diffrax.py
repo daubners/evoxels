@@ -1,6 +1,7 @@
 """Focused diffrax adapter coverage for JAX-compatible problems and steppers."""
 
 import importlib.util
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -10,7 +11,7 @@ from evoxels.diffrax_adapter import DiffraxTimeStepperAdapter
 from evoxels.pdes import (
     CahnHilliard,
     CoupledReactionDiffusion,
-    MultiPhaseAllenCahn,
+    MultiWellAllenCahn,
     ReactionDiffusion,
     ReactionDiffusionSBM,
     TwoPhaseAllenCahn,
@@ -18,6 +19,9 @@ from evoxels.pdes import (
 from evoxels.timesteppers import (
     RKC1,
     RKC2,
+    RKL1,
+    RKL2,
+    ROCK2,
     ExponentialEuler,
     ForwardEuler,
     PseudoSpectralIMEX,
@@ -61,7 +65,8 @@ def _multifield_state(vg, arrays):
 @pytest.mark.skipif(not diffrax_available, reason="diffrax not installed")
 @pytest.mark.parametrize(
     "stepper_cls",
-    [ForwardEuler, RungeKutta4, PseudoSpectralIMEX, ExponentialEuler, RKC1, RKC2],
+    [ForwardEuler, RungeKutta4, PseudoSpectralIMEX, ExponentialEuler,
+     RKC1, RKC2, ROCK2, RKL1, RKL2],
 )
 def test_reaction_diffusion_sbm_supports_all_step_dt_adapters(stepper_cls):
     vf = evo.VoxelFields((4, 4, 4), domain_size=(4, 4, 4))
@@ -73,6 +78,26 @@ def test_reaction_diffusion_sbm_supports_all_step_dt_adapters(stepper_cls):
 
     assert sol.shape == (2, 1, 4, 4, 4)
     assert np.all(np.isfinite(np.asarray(sol)))
+
+
+@pytest.mark.skipif(not diffrax_available, reason="diffrax not installed")
+@pytest.mark.parametrize("stepper_cls", [ROCK2, RKL1, RKL2])
+def test_stabilized_adapter_shortened_final_step(stepper_cls):
+    import diffrax as dfx
+    import jax.numpy as jnp
+
+    problem = SimpleNamespace(rhs=lambda t, u: -u)
+    stepper = stepper_cls(problem, 0.02)
+    solution = dfx.diffeqsolve(
+        dfx.ODETerm(lambda t, y, args: -y),
+        DiffraxTimeStepperAdapter(stepper),
+        t0=0.3, t1=0.355, dt0=0.02,
+        y0=jnp.array([1.0]),
+        saveat=dfx.SaveAt(t1=True),
+        adjoint=dfx.ForwardMode(),
+    )
+    assert int(solution.stats["num_steps"]) == 3
+    np.testing.assert_allclose(np.asarray(solution.ys[-1]), np.exp(-0.055), atol=6e-4)
 
 
 @pytest.mark.skipif(not diffrax_available, reason="diffrax not installed")
@@ -98,7 +123,7 @@ def test_reaction_diffusion_sbm_supports_all_step_dt_adapters(stepper_cls):
         lambda vg, shape: _scalar_state(vg,
             0.5 + 0.05 * np.cos(np.indices(shape, dtype=np.float32)[0]),
         )),
-     (  MultiPhaseAllenCahn,
+     (  MultiWellAllenCahn,
         {"eps": 3.0},
         lambda vg, shape: _multifield_state(vg,
             (np.full(shape, 0.2, dtype=np.float32),

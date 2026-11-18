@@ -28,6 +28,7 @@ class VoxelGrid(FDStencils):
         self.lib = lib
 
         # Other grid information
+        self.voxel_volume = self.spacing[0] * self.spacing[1] * self.spacing[2]
         self.div_dx = 1/self.to_backend(np.array(self.spacing))
         self.div_dx2 = 1/self.to_backend(np.array(self.spacing))**2
 

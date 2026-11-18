@@ -8,10 +8,26 @@ import pytest
 import evoxels as evo
 from evoxels.pdes import ReactionDiffusion, TwoPhaseAllenCahn
 from evoxels.solvers import TimeDependentSolver
-from evoxels.timesteppers import ExponentialEuler
+from evoxels.timesteppers import RKL1, RKL2, ROCK2, ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch
 
 jax_available = importlib.util.find_spec("jax") is not None
+
+
+@pytest.mark.parametrize("stepper_cls", [ROCK2, RKL1, RKL2])
+def test_stabilized_solver_preserves_constant_field(stepper_cls):
+    vf = evo.VoxelFields((4, 4, 4))
+    vf.add_field("c", np.full(vf.shape, 0.5, dtype=np.float32))
+    solver = TimeDependentSolver(
+        vf, "c", backend="torch", device="cpu",
+        problem_cls=ReactionDiffusion, timestepper_cls=stepper_cls,
+    )
+    solver.solve(
+        time_increment=0.1, frames=1, max_iters=3,
+        problem_kwargs={"D": 1.0}, jit=False, verbose=False,
+    )
+    np.testing.assert_array_equal(vf.fields["c"], 0.5)
+
 
 def test_time_solver_multiple_fields():
     """Test calling custom step function and multiple fields"""
@@ -224,6 +240,14 @@ def test_reaction_diffusion_neumann_periodic_keeps_specialized_padding():
     expected = vg.bc.pad_zero_flux_periodic(field)
 
     assert np.allclose(vg.to_numpy(padded), vg.to_numpy(expected))
+
+
+def test_allen_cahn_post_step_clips_completed_state():
+    vf = evo.VoxelFields((2, 1, 1))
+    problem = TwoPhaseAllenCahn(VoxelGridTorch(vf.grid_info(), device="cpu"))
+    state = problem.vg.to_backend(np.array([[[[-0.1]], [[1.1]]]], dtype=np.float32))
+
+    np.testing.assert_array_equal(problem.vg.to_numpy(problem.post_step(state)), [[[[0.0]], [[1.0]]]])
 
 
 def test_exponential_euler_rejects_full_neumann_semilinear_problem():

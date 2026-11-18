@@ -13,6 +13,7 @@ Welcome and evoxel!
    notebooks/04-parameter-estimation.ipynb
    notebooks/10-appendix-convergence-testing.ipynb
    notebooks/11-appendix-phasefield-benchmarks.ipynb
+   timesteppers
    api
    contributing
    authors

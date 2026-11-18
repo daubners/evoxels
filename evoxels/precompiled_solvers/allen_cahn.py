@@ -23,7 +23,7 @@ def run_allen_cahn_solver(
     curvature: float = 0.01,
     potential_derivative: Callable | None = None,
     bc: tuple = ("neumann", "neumann", "neumann"),
-    vtk_out: bool = False,
+    export: str | bool = False,
     verbose: bool = True,
     plot_bounds = None,
 ):
@@ -51,6 +51,6 @@ def run_allen_cahn_solver(
                         "bc": bc},
         jit=jit,
         verbose=verbose,
-        vtk_out=vtk_out,
+        export=export,
         plot_bounds=plot_bounds,
     )
