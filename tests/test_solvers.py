@@ -8,10 +8,26 @@ import pytest
 import evoxels as evo
 from evoxels.pdes import ReactionDiffusion, TwoPhaseAllenCahn
 from evoxels.solvers import TimeDependentSolver
-from evoxels.timesteppers import ExponentialEuler
+from evoxels.timesteppers import RKL1, RKL2, ROCK2, ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch
 
 jax_available = importlib.util.find_spec("jax") is not None
+
+
+@pytest.mark.parametrize("stepper_cls", [ROCK2, RKL1, RKL2])
+def test_stabilized_solver_preserves_constant_field(stepper_cls):
+    vf = evo.VoxelFields((4, 4, 4))
+    vf.add_field("c", np.full(vf.shape, 0.5, dtype=np.float32))
+    solver = TimeDependentSolver(
+        vf, "c", backend="torch", device="cpu",
+        problem_cls=ReactionDiffusion, timestepper_cls=stepper_cls,
+    )
+    solver.solve(
+        time_increment=0.1, frames=1, max_iters=3,
+        problem_kwargs={"D": 1.0}, jit=False, verbose=False,
+    )
+    np.testing.assert_array_equal(vf.fields["c"], 0.5)
+
 
 def test_time_solver_multiple_fields():
     """Test calling custom step function and multiple fields"""

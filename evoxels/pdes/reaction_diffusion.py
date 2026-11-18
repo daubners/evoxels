@@ -15,7 +15,7 @@ class ReactionDiffusion(SemiLinearODE):
     vg: VoxelGrid
     D: float
     f: Callable | None = None
-    A: float = 0.25
+    A: float = 1.0
     bc: tuple = ('periodic', 'periodic', 'periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
 
