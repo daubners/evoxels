@@ -58,7 +58,17 @@ def test_mock_vtk_export():
     vf.add_field('test1')
     vf.add_field('test2')
     with pytest.raises(ValueError):
-        vf.export_to_vtk('bad_name')
+        vf.export_to_vtk(filename='bad_name')
+
+def test_npy_export(tmp_path):
+    vf = evo.VoxelFields((2, 3, 1))
+    field = np.arange(6).reshape(vf.shape)
+    vf.add_field("test", field)
+
+    filename = tmp_path / "field.npy"
+    vf.export_to_npy("test", filename)
+
+    assert np.array_equal(np.load(filename), field)
 
 def test_sphere_volume_fraction():
     vf = evo.VoxelFields((6, 5, 5), convention='staggered_x')

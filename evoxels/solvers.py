@@ -65,6 +65,9 @@ class BaseSolver(ABC):
             self.problem = self.problem_cls(self.vg, **problem_kwargs)
             timestepper = self.timestepper_cls(self.problem, time_increment)
             step = timestepper.step
+            if hasattr(self.problem, "post_step"):
+                raw_step = step
+                step = lambda t, u: self.problem.post_step(raw_step(t, u))
 
         # Make use of just-in-time compilation
         if jit and self.backend == 'jax':
@@ -78,7 +81,7 @@ class BaseSolver(ABC):
     
     @abstractmethod
     def _run_loop(self, u, step, time_increment, frames, max_iters,
-                  vtk_out, verbose, plot_bounds, colormap):
+                  export, verbose, plot_bounds, colormap):
         """Abstract method for running the time integration loop."""
         raise NotImplementedError("Subclasses must implement _run_loop method.")
 
@@ -90,7 +93,7 @@ class BaseSolver(ABC):
         problem_kwargs=None,
         jit=True,
         verbose=True,
-        vtk_out=False,
+        export=False,
         plot_bounds=None,
         colormap='viridis'
         ):
@@ -104,15 +107,19 @@ class BaseSolver(ABC):
             jit (bool): Create just-in-time compiled kernel if ``True`` 
             verbose (bool | str): If ``True`` prints memory stats, ``'plot'``
                 updates an interactive plot.
-            vtk_out (bool): Write VTK files for each frame if ``True``.
+            export (str): Export frames to VTK if ``"vtk"`` or NumPy arrays if
+                ``"npy"``.
             plot_bounds (tuple | None): Optional value range for plots.
         """
+        if export not in (False, "vtk", "npy"):
+            raise ValueError("export must be False, 'vtk', or 'npy'.")
+
         u = self._init_fields()
         step = self._init_stepper(time_increment, problem_kwargs, jit)
 
         start = timer()
         u = self._run_loop(u, step, time_increment, frames, max_iters,
-                           vtk_out, verbose, plot_bounds, colormap)
+                           export, verbose, plot_bounds, colormap)
         end = timer()
         self.computation_time = end - start
         if verbose:
@@ -154,7 +161,7 @@ class BaseSolver(ABC):
         self._fig.canvas.draw_idle()
         self._fig.canvas.flush_events()
 
-    def _handle_outputs(self, u, frame, time, vtk_out, verbose, plot_bounds, colormap):
+    def _handle_outputs(self, u, frame, time, export, verbose, plot_bounds, colormap):
         """Store results and optionally plot or write them to disk."""
         if getattr(self, 'problem', None) is not None:
             u_out = self.vg.bc.trim_ghost_nodes(self.problem.pad_bc(u))
@@ -169,10 +176,16 @@ class BaseSolver(ABC):
             print(f"NaN detected in frame {frame} at time {time}. Aborting simulation.")
             sys.exit(1)
 
-        if vtk_out:
-            filename = self.problem_cls.__name__ + "_" +\
+        if export == "vtk":
+            prefix = self.problem_cls.__name__ if self.problem_cls else "solution"
+            filename = prefix + "_" +\
                        self.fieldnames[0] + f"_{frame:03d}.vtk"
-            self.vf.export_to_vtk(filename=filename, field_names=self.fieldnames)
+            self.vf.export_to_vtk(field_names=self.fieldnames, filename=filename)
+        elif export == 'npy':
+            prefix = self.problem_cls.__name__ if self.problem_cls else "solution"
+            for name in self.fieldnames:
+                filename = prefix + "_" + name + f"_{frame:03d}.npy"
+                self.vf.export_to_npy(field_name=name, filename=filename)
 
         if verbose == 'plot':
             if not plt.isinteractive():
@@ -195,20 +208,20 @@ class BaseSolver(ABC):
 class TimeDependentSolver(BaseSolver):
     """Solver for time-dependent problems."""
     def _run_loop(self, u, step, time_increment, frames, max_iters,
-                  vtk_out, verbose, plot_bounds, colormap):
+                  export, verbose, plot_bounds, colormap):
         n_out = max_iters // frames
         frame = 0
 
         for i in range(max_iters):
             time = i * time_increment
             if i % n_out == 0:
-                self._handle_outputs(u, frame, time, vtk_out,
+                self._handle_outputs(u, frame, time, export,
                                      verbose, plot_bounds, colormap)
                 frame += 1
 
             u = step(time, u)
         time = max_iters * time_increment
-        self._handle_outputs(u, frame, time, vtk_out,
+        self._handle_outputs(u, frame, time, export,
                              verbose, plot_bounds, colormap)
         return u
 
@@ -219,7 +232,7 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
     check_freq: int = 10
     
     def _run_loop(self, u, step, time_increment, frames, max_iters,
-                  vtk_out, verbose, plot_bounds, colormap):
+                  export, verbose, plot_bounds, colormap):
         self.converged = False
         self.iter = 0
 
@@ -231,7 +244,7 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
             if self.iter % self.check_freq == 0:
                 self.converged = self.check_convergence(diff, verbose)
 
-        self._handle_outputs(u, 0, time, vtk_out,
+        self._handle_outputs(u, 0, time, export,
                              verbose, plot_bounds, colormap)
         return u
     

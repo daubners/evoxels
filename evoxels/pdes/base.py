@@ -183,3 +183,40 @@ class SmoothedBoundaryODE(ODE):
     @abstractmethod
     def mask(self) -> Any | float:
         """A field (same shape as the state) that remains fixed."""
+
+    def initialize_smoothed_boundary(self, threshold=1e-4):
+        """Prepare the static mask and its diffuse-interface norm."""
+        if self.mask is None:
+            self.mask = self.vg.lib.ones(self.vg.shape)
+            self.mask = self.vg.init_scalar_field(self.mask)
+            self.mask = self.vg.pad_periodic(
+                self.vg.bc.trim_boundary_nodes(self.mask)
+            )
+            self.norm = 1.0
+            return
+
+        self.mask = self.vg.init_scalar_field(self.mask)
+        mask_0 = self.mask[:, 0, :, :]
+        mask_1 = self.mask[:, -1, :, :]
+        self.mask = self.vg.pad_periodic(
+            self.vg.bc.trim_boundary_nodes(self.mask)
+        )
+        if self.bc_type[0] != 'periodic':
+            inner = slice(1, -1)
+            self.mask = self.vg.set(self.mask, (slice(None), 0, inner, inner), mask_0)
+            self.mask = self.vg.set(self.mask, (slice(None), -1, inner, inner), mask_1)
+
+        self.norm = self.vg.lib.sqrt(self.vg.gradient_norm_squared(self.mask))
+        self.mask = self.vg.lib.clip(self.mask, threshold, 1)
+
+        x_bc, y_bc, z_bc = self.bc
+        if x_bc[0] == 'dirichlet':
+            self.bc = (
+                ('dirichlet', (
+                    x_bc[1][0] * self.mask[:, 0, :, :],
+                    x_bc[1][1] * self.mask[:, -1, :, :],
+                )),
+                y_bc,
+                z_bc,
+            )
+            self.initialize_boundary_conditions()

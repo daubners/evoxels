@@ -226,6 +226,14 @@ def test_reaction_diffusion_neumann_periodic_keeps_specialized_padding():
     assert np.allclose(vg.to_numpy(padded), vg.to_numpy(expected))
 
 
+def test_allen_cahn_post_step_clips_completed_state():
+    vf = evo.VoxelFields((2, 1, 1))
+    problem = TwoPhaseAllenCahn(VoxelGridTorch(vf.grid_info(), device="cpu"))
+    state = problem.vg.to_backend(np.array([[[[-0.1]], [[1.1]]]], dtype=np.float32))
+
+    np.testing.assert_array_equal(problem.vg.to_numpy(problem.post_step(state)), [[[[0.0]], [[1.0]]]])
+
+
 def test_exponential_euler_rejects_full_neumann_semilinear_problem():
     vf = evo.VoxelFields((4, 4, 4))
     vg = VoxelGridTorch(vf.grid_info(), device="cpu")

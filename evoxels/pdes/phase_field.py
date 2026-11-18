@@ -7,7 +7,7 @@ import sympy as sp
 import sympy.vector as spv
 
 from ..voxelgrid import VoxelGrid
-from .base import SemiLinearODE
+from .base import SemiLinearODE, SmoothedBoundaryODE
 
 
 @dataclass
@@ -16,6 +16,7 @@ class CahnHilliard(SemiLinearODE):
     eps: float = 3.0
     D: float = 1.0
     mu_hom: Callable | None = None
+    f: Callable | None = None
     A: float = 0.25
     bc: tuple = ('periodic', 'periodic', 'periodic')
     _fourier_symbol: Any = field(init=False, repr=False)
@@ -26,6 +27,8 @@ class CahnHilliard(SemiLinearODE):
         self._fourier_symbol = -2 * self.eps * self.D * self.A * self.k_squared()**2
         if self.mu_hom is None:
             self.mu_hom = lambda c, lib=None: 18 / self.eps * c * (1 - c) * (1 - 2 * c)
+        if self.f is None:
+            self.f = lambda c=None, t=None, lib=None: 0
     
     @property
     def order(self):
@@ -42,10 +45,17 @@ class CahnHilliard(SemiLinearODE):
         except TypeError:
             return self.mu_hom(c)
 
+    def _eval_f(self, t, c, lib):
+        """Evaluate source/forcing term using ``self.f``."""
+        try:
+            return self.f(t, c, lib)
+        except TypeError:
+            return self.f(t, c)
+
     def rhs_analytic(self, t, c):
         mu = self._eval_mu(c, sp) - 2*self.eps*spv.laplacian(c)
         fluxes = self.D*c*(1-c)*spv.gradient(mu)
-        rhs = spv.divergence(fluxes)
+        rhs = spv.divergence(fluxes) + self._eval_f(t, c, sp)
         return rhs
 
     def rhs(self, t, c):
@@ -91,7 +101,75 @@ class CahnHilliard(SemiLinearODE):
                         self.vg.grad_z_face(mu)
                     )[:,1:-1,1:-1,:]
 
-        return self.D * divergence
+        return self.D * divergence + self._eval_f(t, c, self.vg.lib)
+
+
+@dataclass
+class CahnHilliardSBM(CahnHilliard, SmoothedBoundaryODE):
+    mask: Any | None = None
+    bc_flux: float = 0.0
+    threshold: float = 1e-4
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.initialize_smoothed_boundary(self.threshold)
+
+    def _eval_bc_flux(self, c, mu, lib):
+        return self.bc_flux
+
+    def rhs_analytic(self, t, u, mask):
+        grad_m = spv.gradient(mask)
+        norm_grad_m = sp.sqrt(grad_m.dot(grad_m))
+
+        c = u/mask
+        mu = self._eval_mu(c, sp) - 2*self.eps/mask*spv.divergence(mask*spv.gradient(c))
+        fluxes = mask*self.D*c*(1-c)*spv.gradient(mu)
+
+        divergence = spv.divergence(fluxes)
+        du = divergence + norm_grad_m*self._eval_bc_flux(c, mu, sp) + mask*self._eval_f(t, c, sp)
+        return du
+
+    def _concentration_and_mu(self, u):
+        """Return padded concentration and chemical potential for ``u = mask * c``."""
+        c = self.pad_bc(u)/self.mask
+        c = self.vg.lib.clip(c, 0, 1)
+
+        laplace = self.vg.grad_x_face(
+                        self.vg.to_x_face(self.mask) * self.vg.grad_x_face(c)
+                      )[:,:,1:-1,1:-1]
+        laplace += self.vg.grad_y_face(
+                        self.vg.to_y_face(self.mask) * self.vg.grad_y_face(c)
+                      )[:,1:-1,:,1:-1]
+        laplace += self.vg.grad_z_face(
+                        self.vg.to_z_face(self.mask) * self.vg.grad_z_face(c)
+                      )[:,1:-1,1:-1,:]
+
+        mu = self._eval_mu(c[:,1:-1,1:-1,1:-1], self.vg.lib) - 2*self.eps/self.mask[:,1:-1,1:-1,1:-1]*laplace
+        mu = self.pad_bc(mu)
+        return c, mu
+
+    def rhs(self, t, u):
+        c, mu = self._concentration_and_mu(u)
+
+        divergence = self.vg.grad_x_face(
+                        self.vg.to_x_face(c) * (1-self.vg.to_x_face(c)) *\
+                        self.vg.to_x_face(self.mask) * self.vg.grad_x_face(mu)
+                    )[:,:,1:-1,1:-1]
+
+        divergence += self.vg.grad_y_face(
+                        self.vg.to_y_face(c) * (1-self.vg.to_y_face(c)) *\
+                        self.vg.to_y_face(self.mask) * self.vg.grad_y_face(mu)
+                    )[:,1:-1,:,1:-1]
+
+        divergence += self.vg.grad_z_face(
+                        self.vg.to_z_face(c) * (1-self.vg.to_z_face(c)) *\
+                        self.vg.to_z_face(self.mask) * self.vg.grad_z_face(mu)
+                    )[:,1:-1,1:-1,:]
+
+        update = self.D * divergence + \
+                 self.norm*self._eval_bc_flux(c[:,1:-1,1:-1,1:-1], mu[:,1:-1,1:-1,1:-1], self.vg.lib) + \
+                 self.mask[:,1:-1,1:-1,1:-1]*self._eval_f(t, c[:,1:-1,1:-1,1:-1], self.vg.lib)
+        return update
 
 
 @dataclass
@@ -160,7 +238,6 @@ class TwoPhaseAllenCahn(SemiLinearODE):
         Returns:
             Backend array of the same shape as ``\phi`` containing ``d\phi/dt``.
         """
-        phi = self.vg.lib.clip(phi, 0, 1)
         potential = self._eval_potential(phi, self.vg.lib)
         phi_pad = self.pad_bc(phi)
         laplace = self.curvature*self.vg.laplace(phi_pad)
@@ -170,9 +247,13 @@ class TwoPhaseAllenCahn(SemiLinearODE):
                   + norm_grad_phi * self.force
         return self.M * df_dphi
 
+    def post_step(self, phi):
+        """Keep a completed Allen--Cahn step within phase-fraction bounds."""
+        return self.vg.lib.clip(phi, 0, 1)
+
 
 @dataclass
-class MultiPhaseAllenCahn(SemiLinearODE):
+class MultiWellAllenCahn(SemiLinearODE):
     vg: VoxelGrid
     eps: float = 3.0
     gab: float = 1.0
@@ -239,6 +320,10 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         theta = theta_num / N_active[None, ...]
 
         return self.vg.lib.clip(phis - theta, min=0.0)
+
+    def post_step(self, phis):
+        """Enforce the simplex after each completed solver step."""
+        return self.project_to_simplex(phis)
     
     def _calc_multiwell_derivatives(self, phis):
         sum_phi_squared = self.vg.sum(phis**2, dim=0, keepdim=True)
@@ -278,7 +363,6 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         Returns:
             Backend array of the same shape as ``\phi`` containing ``d\phi/dt``.
         """
-        phis = self.project_to_simplex(phis)
 
         # Gradient term
         phi_pad = self.pad_bc(phis)
@@ -295,7 +379,7 @@ class MultiPhaseAllenCahn(SemiLinearODE):
         return self.M * (self._bulk_energy_term(phis) - dphi)
 
 # @dataclass
-# class CurvatureMultiPhaseAllenCahn(MultiPhaseAllenCahn):
+# class CurvatureMultiWellAllenCahn(MultiWellAllenCahn):
 #     curvature: float = 1.0
 
 #     def rhs_analytic(self, t, phis):

@@ -9,10 +9,6 @@ import sympy.vector as spv
 from ..voxelgrid import VoxelGrid
 from .base import SemiLinearODE, SmoothedBoundaryODE
 
-# Shorthands in slicing logic
-__ = slice(None)    # all elements [:]
-_i_ = slice(1, -1)  # inner elements [1:-1]
-
 
 @dataclass
 class ReactionDiffusion(SemiLinearODE):
@@ -61,31 +57,7 @@ class ReactionDiffusionSBM(ReactionDiffusion, SmoothedBoundaryODE):
 
     def __post_init__(self):
         super().__post_init__()
-        if self.mask is None:
-            self.mask = self.vg.lib.ones(self.vg.shape)
-            self.mask = self.vg.init_scalar_field(self.mask)
-            self.mask = self.vg.pad_periodic(\
-                        self.vg.bc.trim_boundary_nodes(self.mask))
-            self.norm = 1.0
-        else:
-            self.mask = self.vg.init_scalar_field(self.mask)
-            mask_0 = self.mask[:,0,:,:]
-            mask_1 = self.mask[:,-1,:,:]
-            self.mask = self.vg.pad_periodic(\
-                        self.vg.bc.trim_boundary_nodes(self.mask))
-            if self.bc_type[0] != 'periodic':
-                self.mask = self.vg.set(self.mask, (__, 0,_i_,_i_), mask_0)
-                self.mask = self.vg.set(self.mask, (__,-1,_i_,_i_), mask_1)
-
-            self.norm = self.vg.lib.sqrt(self.vg.gradient_norm_squared(self.mask))
-            self.mask = self.vg.lib.clip(self.mask, 1e-4, 1)
-
-            x_bc, y_bc, z_bc = self.bc
-            if x_bc[0] == 'dirichlet':
-                self.bc = (
-                    ('dirichlet', (x_bc[1][0] * self.mask[:,0,:,:], x_bc[1][1] * self.mask[:,-1,:,:])),
-                    y_bc, z_bc)
-                self.initialize_boundary_conditions()
+        self.initialize_smoothed_boundary()
 
     def rhs_analytic(self, t, u, mask):
         grad_m = spv.gradient(mask)

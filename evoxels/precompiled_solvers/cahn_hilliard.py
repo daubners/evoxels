@@ -20,7 +20,7 @@ def run_cahn_hilliard_solver(
     diffusivity: float = 1.0,
     mu_hom: Callable | None = None,
     bc: tuple = ("periodic", "periodic", "periodic"),
-    vtk_out: bool = False,
+    export: str | bool = False,
     verbose: bool = True,
     plot_bounds = None,
 ):
@@ -42,6 +42,6 @@ def run_cahn_hilliard_solver(
         problem_kwargs={"eps": eps, "D": diffusivity, "mu_hom": mu_hom, "bc": bc},
         jit=jit,
         verbose=verbose,
-        vtk_out=vtk_out,
+        export=export,
         plot_bounds=plot_bounds,
     )
