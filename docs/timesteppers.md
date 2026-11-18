@@ -192,8 +192,9 @@ RHS. The implementation caches the coefficients as Python scalars and uses
 differences from $u_n$ in the state recurrence to preserve zero-RHS states.
 
 `RKL1` accepts integer stage counts $s\geq1$ (one stage is Forward Euler).
-`RKL2` accepts $s\geq2$. Booleans, nonintegers, and smaller values raise
-`ValueError`. Both even and odd stage counts are supported.
+`RKL2` accepts $s\geq2$. Booleans and nonintegers raise `TypeError`;
+integer values below the minimum raise `ValueError`.
+Both even and odd stage counts are supported.
 
 For real nonpositive eigenvalues with largest magnitude $\rho$, sufficient
 linear stability conditions are

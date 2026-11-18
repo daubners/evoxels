@@ -285,7 +285,7 @@ class RKL1(TimeStepper):
 
     def __post_init__(self):
         if isinstance(self.polygrad, bool) or not isinstance(self.polygrad, Integral):
-            raise ValueError("polygrad must be an integer >= 1 for RKL1")
+            raise TypeError("polygrad must be an integer >= 1 for RKL1")
         if self.polygrad < 1:
             raise ValueError("polygrad must be an integer >= 1 for RKL1")
         w1 = 2 / (self.polygrad * (self.polygrad + 1))
@@ -325,7 +325,7 @@ class RKL2(TimeStepper):
 
     def __post_init__(self):
         if isinstance(self.polygrad, bool) or not isinstance(self.polygrad, Integral):
-            raise ValueError("polygrad must be an integer >= 2 for RKL2")
+            raise TypeError("polygrad must be an integer >= 2 for RKL2")
         if self.polygrad < 2:
             raise ValueError("polygrad must be an integer >= 2 for RKL2")
         w1 = 4 / (self.polygrad*self.polygrad + self.polygrad - 2)

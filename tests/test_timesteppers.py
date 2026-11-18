@@ -8,7 +8,6 @@ from numpy.polynomial.legendre import legval
 
 from evoxels.timesteppers import RKL1, RKL2, ROCK2
 
-
 STEPPERS = (RKL1, RKL2, ROCK2)
 STAGE_CASES = [(RKL1, 1), (RKL2, 2), (ROCK2, 3)] + [
     (cls, 4) for cls in STEPPERS
@@ -51,13 +50,14 @@ def test_step_contract_and_rhs_count(cls, s):
     np.testing.assert_array_equal(stepper.step(1.3, u), u)
 
 
-@pytest.mark.parametrize("cls,s", [
-    (RKL1, True), (RKL1, 4.0), (RKL1, 0),
-    (RKL2, True), (RKL2, 4.0), (RKL2, 1),
-    (ROCK2, True), (ROCK2, 4.0), (ROCK2, 2), (ROCK2, 23), (ROCK2, 201),
+@pytest.mark.parametrize("cls,s,exception", [
+    (RKL1, True, TypeError), (RKL1, 4.0, TypeError), (RKL1, 0, ValueError),
+    (RKL2, True, TypeError), (RKL2, 4.0, TypeError), (RKL2, 1, ValueError),
+    (ROCK2, True, ValueError), (ROCK2, 4.0, ValueError), (ROCK2, 2, ValueError),
+    (ROCK2, 23, ValueError), (ROCK2, 201, ValueError),
 ])
-def test_invalid_stage_counts(cls, s):
-    with pytest.raises(ValueError, match="polygrad"):
+def test_invalid_stage_counts(cls, s, exception):
+    with pytest.raises(exception, match="polygrad"):
         cls(_problem(lambda t, u: -u), 0.1, polygrad=s)
 
 
@@ -145,6 +145,6 @@ def test_jax_values_gradients_and_traced_dt(cls):
                     else _rkl_amplification(cls, 4, -20*dt))
         actual = compiled(jnp.asarray(0.3), jnp.asarray(dt), u)
         np.testing.assert_allclose(np.asarray(actual), np.asarray(u)*expected, atol=2e-6)
-        grad = jax.grad(lambda y: jnp.sum(compiled(0.3, jnp.asarray(dt), y)))(u)
+        grad = jax.grad(lambda y, h: jnp.sum(compiled(0.3, h, y)))(u, jnp.asarray(dt))
         np.testing.assert_allclose(np.asarray(grad), expected, atol=2e-6)
         assert actual.dtype == u.dtype and actual.device == u.device
