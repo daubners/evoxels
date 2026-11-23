@@ -41,6 +41,15 @@ class FDStencils:
         """Gradient at face position staggered in z"""
         return (field[:,:,:,1:] - field[:,:,:,:-1]) * self.div_dx[2]
 
+    def to_corner(self, field):
+        """Average cell values onto corners; shape (nfields, nx, ny, nz)."""
+        return 0.125 * (
+            field[:, 1:, 1:, 1:] + field[:, 1:, 1:, :-1]
+            + field[:, 1:, :-1, 1:] + field[:, 1:, :-1, :-1]
+            + field[:, :-1, 1:, 1:] + field[:, :-1, 1:, :-1]
+            + field[:, :-1, :-1, 1:] + field[:, :-1, :-1, :-1]
+        )
+
     def grad_x_corner(self, field):
         """Gradient in x at cell corners of the rotated staggered grid."""
         return 0.25 * (
