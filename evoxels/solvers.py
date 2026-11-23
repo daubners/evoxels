@@ -233,32 +233,38 @@ class SteadyStatePseudoTimeSolver(BaseSolver):
     
     def _run_loop(self, u, step, time_increment, frames, max_iters,
                   export, verbose, plot_bounds, colormap):
+        if self.check_freq <= 0:
+            raise ValueError("check_freq must be positive")
+
         self.converged = False
         self.iter = 0
 
         while not self.converged and self.iter < max_iters:
             time = self.iter * time_increment
-            diff = u - step(time, u)
-            u = step(time, u)
+            u_next = step(time, u)
+            self.iter += 1
 
-            if self.iter % self.check_freq == 0:
-                self.converged = self.check_convergence(diff, verbose)
+            if self.iter % self.check_freq == 0 or self.iter == max_iters:
+                self.converged = self.check_convergence(u_next - u, verbose)
+            u = u_next
 
-        self._handle_outputs(u, 0, time, export,
-                             verbose, plot_bounds, colormap)
+        time = self.iter * time_increment
+        self._handle_outputs(u, 0, time, export, verbose, plot_bounds, colormap)
         return u
     
     def check_convergence(self, diff, verbose):
-        """Check for convergence based on relative change in fields."""
+        """Check the RMS update against an absolute tolerance."""
         converged = True
         for i, name in enumerate(self.fieldnames):
             # Check if Frobenius norm of change is below threshold
-            rel_change = self.vg.lib.linalg.norm(diff[i]) / \
-                         self.vg.lib.sqrt(self.vf.Nx * self.vf.Ny * self.vf.Nz)
-            if rel_change > self.conv_crit:
+            rms_change = self.vg.lib.linalg.norm(diff[i]) / self.vg.lib.sqrt(self.vg.size)
+
+            if not self.vg.lib.isfinite(rms_change):
+                raise FloatingPointError(f"Non-finite update in field {name!r}")
+            if rms_change > self.conv_crit:
                 converged = False
             if verbose:
-                print(f"Iter {self.iter}: Field '{name}' relative change: {rel_change:.2e}")
+                print(f"Iter {self.iter}: Field '{name}' relative change: {rms_change:.2e}")
 
         if converged and verbose:
             print(f"Converged after {self.iter} iterations.")
