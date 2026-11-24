@@ -95,7 +95,9 @@ class BaseSolver(ABC):
         verbose=True,
         export=False,
         plot_bounds=None,
-        colormap='viridis'
+        colormap='viridis',
+        background=None,
+        background_color='black',
         ):
         """Run the time integration loop.
 
@@ -110,9 +112,17 @@ class BaseSolver(ABC):
             export (str): Export frames to VTK if ``"vtk"`` or NumPy arrays if
                 ``"npy"``.
             plot_bounds (tuple | None): Optional value range for plots.
+            background (array-like | None): Static boolean mask matching vf.shape;
+                True marks background voxels in standard scalar live plots.
+                Does not affect computation, export, or multiphase plots.
+            background_color: Matplotlib color for masked voxels (default black).
         """
         if export not in (False, "vtk", "npy"):
             raise ValueError("export must be False, 'vtk', or 'npy'.")
+
+        background = self.vf._validate_background(background)
+        self._background = None if background is None else background.copy()
+        self._background_color = background_color
 
         u = self._init_fields()
         step = self._init_stepper(time_increment, problem_kwargs, jit)
@@ -132,7 +142,17 @@ class BaseSolver(ABC):
     def _plot_frame(self, fields, time, colormap, plot_bounds):
         """Plot a single frame of the specified field."""
         slice_idx = self.vf.Nz // 2
-        slice = self.vg.to_numpy(fields[0, :, :, slice_idx])
+        background = getattr(self, '_background', None)
+        if background is None:
+            slice = self.vg.to_numpy(fields[0, :, :, slice_idx])
+        else:
+            # Exported fields include physical boundary nodes on staggered grids.
+            slice = np.ma.masked_where(
+                background[:, :, slice_idx],
+                self.vf.fields[self.fieldnames[0]][:, :, slice_idx], copy=False,
+            )
+            colormap = plt.get_cmap(colormap).with_extremes(bad=self._background_color)
+        empty = background is not None and slice.count() == 0
 
         if not hasattr(self, "_fig"):
             self._fig, self._ax0 = plt.subplots(nrows=1, ncols=1)
@@ -146,14 +166,20 @@ class BaseSolver(ABC):
                 self._im0 = self._ax0.imshow(slice.T, cmap=colormap, origin='lower', extent=extent,\
                                              vmin=plot_bounds[0], vmax=plot_bounds[1])
             else:
-                self._im0 = self._ax0.imshow(slice.T, cmap=colormap, origin='lower', extent=extent)
+                self._im0 = self._ax0.imshow(
+                    slice.T, cmap=colormap, origin='lower', extent=extent,
+                    vmin=0 if empty else None, vmax=1 if empty else None,
+                )
             ratio = np.clip((end2 - start2) / (end1 - start1), 0, 1)
             self._cbar = self._fig.colorbar(self._im0, ax=self._ax0, shrink=ratio)
             self._ax0.set_xlabel("X")
             self._ax0.set_ylabel("Y")
         else:
             self._im0.set_data(slice.T)
-            if plot_bounds is None:
+            self._im0.set_cmap(colormap)
+            if plot_bounds is not None:
+                self._im0.set_clim(*plot_bounds)
+            elif not empty:
                 self._im0.set_clim(float(slice.min()), float(slice.max()))
                 self._cbar.update_normal(self._im0)
 

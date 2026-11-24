@@ -26,6 +26,8 @@ def run_allen_cahn_solver(
     export: str | bool = False,
     verbose: bool = True,
     plot_bounds = None,
+    background=None,
+    background_color='black',
 ):
     """
     Solves time-dependent Allen-Cahn problem with RungeKutta4 timestepper.
@@ -53,4 +55,6 @@ def run_allen_cahn_solver(
         verbose=verbose,
         export=export,
         plot_bounds=plot_bounds,
+        background=background,
+        background_color=background_color,
     )
