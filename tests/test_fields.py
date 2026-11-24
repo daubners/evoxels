@@ -53,6 +53,57 @@ def test_plot_functions():
     slider.set_val(1)
     plt.close("all")
 
+
+@pytest.mark.parametrize("direction, axis", [("x", 0), ("y", 1), ("z", 2)])
+def test_plot_background(direction, axis, monkeypatch):
+    monkeypatch.setattr(plt, "show", lambda: None)
+    vf = evo.VoxelFields((3, 4, 5))
+    values = np.arange(60).reshape(vf.shape)
+    background = values % 3 == 0
+    values[background] = 10000
+    vf.add_field("f", values)
+    original_bad = plt.get_cmap("viridis").get_bad().copy()
+
+    assert vf.plot_slice("f", 1, direction=direction, background=background,
+                         background_color="red") is None
+    im = plt.gcf().axes[0].images[0]
+    expected_mask = np.take(background, 1, axis=axis).T
+    np.testing.assert_array_equal(im.get_array().mask, expected_mask)
+    visible = np.take(values, 1, axis=axis).T[~expected_mask]
+    assert im.get_clim() == (visible.min(), visible.max())
+    np.testing.assert_array_equal(im.cmap.get_bad(), [1, 0, 0, 1])
+
+    slider = vf.plot_field_interactive("f", direction=direction, background=background)
+    im = slider.ax.figure.axes[0].images[0]
+    for index in (0, 1, 2):
+        slider.set_val(index)
+        np.testing.assert_array_equal(
+            im.get_array().mask, np.take(background, index, axis=axis).T,
+        )
+    assert im.get_clim() == (values[~background].min(), values[~background].max())
+    np.testing.assert_array_equal(im.cmap.get_bad(), [0, 0, 0, 1])
+    np.testing.assert_array_equal(plt.get_cmap("viridis").get_bad(), original_bad)
+    np.testing.assert_array_equal(vf.fields["f"], values)
+    plt.close("all")
+
+
+@pytest.mark.parametrize("interactive", [False, True])
+def test_plot_background_validation_and_empty(interactive, monkeypatch):
+    monkeypatch.setattr(plt, "show", lambda: None)
+    vf = evo.VoxelFields((3, 4, 5))
+    vf.add_field("f", np.ones(vf.shape))
+    plot = vf.plot_field_interactive if interactive else lambda *a, **kw: vf.plot_slice(*a, 0, **kw)
+    with pytest.raises(ValueError, match="boolean"):
+        plot("f", background=np.zeros(vf.shape, dtype=int))
+    with pytest.raises(ValueError, match="shape"):
+        plot("f", background=np.zeros((3, 4), dtype=bool))
+    for bounds in (None, (2, 5)):
+        plot("f", background=np.ones(vf.shape, dtype=bool), value_bounds=bounds)
+        im = plt.gcf().axes[0].images[0]
+        assert im.get_array().mask.all()
+        assert im.get_clim() == ((0, 1) if bounds is None else bounds)
+    plt.close("all")
+
 def test_mock_vtk_export():
     vf = evo.VoxelFields((3, 3, 3))
     vf.add_field('test1')

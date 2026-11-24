@@ -228,7 +228,18 @@ class VoxelFields:
             filename = f"{field_name}.npy"
         np.save(filename, self.fields[field_name])
 
-    def plot_slice(self, fieldname, slice_index, direction='z', colormap='viridis', value_bounds=None):
+    def _validate_background(self, background):
+        if background is None:
+            return None
+        background = np.asarray(background)
+        if background.dtype != np.bool_:
+            raise ValueError("background must be a boolean mask")
+        if background.shape != self.shape:
+            raise ValueError(f"background must have shape {self.shape}")
+        return background
+
+    def plot_slice(self, fieldname, slice_index, direction='z', colormap='viridis',
+                   value_bounds=None, background=None, background_color='black'):
         """
         Plots a 2D slice of a field along a specified direction.
 
@@ -238,6 +249,9 @@ class VoxelFields:
             direction (str): Normal direction of the slice ('x', 'y', or 'z').
             dpi (int): Resolution of the plot.
             colormap (str): Colormap to use for the plot.
+            background (array-like | None): Boolean mask of the full spatial shape;
+                True marks background voxels. Only affects display.
+            background_color: Matplotlib color for masked voxels (default black).
 
         Raises:
             ValueError: If an invalid direction is provided.
@@ -265,13 +279,21 @@ class VoxelFields:
         else:
             raise ValueError("Given direction must be x, y or z")
 
+        background = self._validate_background(background)
+        values = self.fields[fieldname][slice].T
+        if background is not None:
+            values = np.ma.masked_where(background[slice].T, values, copy=False)
+            colormap = plt.get_cmap(colormap).with_extremes(bad=background_color)
+            if value_bounds is None and values.count() == 0:
+                value_bounds = (0, 1)
+
         plt.figure()
         if value_bounds is not None:
-            im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap,\
+            im = plt.imshow(values, cmap=colormap,\
                             origin='lower', extent=[start1, end1, start2, end2],\
                                 vmin=value_bounds[0], vmax=value_bounds[1])
         else:
-            im = plt.imshow(self.fields[fieldname][slice].T, cmap=colormap, \
+            im = plt.imshow(values, cmap=colormap, \
                             origin='lower', extent=[start1, end1, start2, end2])
 
         ratio = np.clip((end2-start2)/(end1-start1), 0, 1)
@@ -281,7 +303,8 @@ class VoxelFields:
         plt.title(f'Slice {slice_index} of {fieldname} in {direction}')
         plt.show()
 
-    def plot_field_interactive(self, fieldname, direction='x', colormap='viridis', value_bounds=None):
+    def plot_field_interactive(self, fieldname, direction='x', colormap='viridis',
+                               value_bounds=None, background=None, background_color='black'):
         """
         Creates an interactive plot for exploring slices of a 3D field.
 
@@ -290,6 +313,9 @@ class VoxelFields:
             direction (str): Direction of slicing ('x', 'y', or 'z').
             dpi (int): Resolution of the plot.
             colormap (str): Colormap to use for the plot.
+            background (array-like | None): Boolean mask of the full spatial shape;
+                True marks background voxels. Only affects display.
+            background_color: Matplotlib color for masked voxels (default black).
 
         Raises:
             ValueError: If an invalid direction is provided.
@@ -310,6 +336,12 @@ class VoxelFields:
             raise ValueError("Given direction must be x, y or z")
 
         field = np.transpose(self.fields[fieldname], axes)
+        background = self._validate_background(background)
+        if background is not None:
+            field = np.ma.masked_where(np.transpose(background, axes), field, copy=False)
+            colormap = plt.get_cmap(colormap).with_extremes(bad=background_color)
+            if value_bounds is None and field.count() == 0:
+                value_bounds = (0, 1)
         fig, ax = plt.subplots()
         if value_bounds is None:
             value_bounds = (np.min(field), np.max(field))

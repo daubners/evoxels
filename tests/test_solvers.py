@@ -1,7 +1,9 @@
 """Tests for solver functionality."""
 
 import importlib.util
+from types import SimpleNamespace
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
@@ -12,6 +14,27 @@ from evoxels.timesteppers import RKL1, RKL2, ROCK2, ExponentialEuler
 from evoxels.voxelgrid import VoxelGridTorch
 
 jax_available = importlib.util.find_spec("jax") is not None
+
+
+def test_solver_background_validation_and_empty(monkeypatch):
+    monkeypatch.setattr("IPython.display.display", lambda *a, **kw: SimpleNamespace(update=lambda fig: None))
+    vf = evo.VoxelFields((3, 4, 2))
+    vf.add_field("c", np.ones(vf.shape))
+    solver = TimeDependentSolver(
+        vf, "c", backend="torch", device="cpu", step_fn=lambda t, u: u,
+    )
+    with pytest.raises(ValueError, match="boolean"):
+        solver.solve(background=np.zeros(vf.shape, dtype=int))
+    with pytest.raises(ValueError, match="shape"):
+        solver.solve(background=np.zeros((3, 4), dtype=bool))
+    background = np.ones(vf.shape, dtype=bool)
+    solver.solve(frames=1, max_iters=1, jit=False, verbose="plot", background=background)
+    background[:] = False
+    assert solver._background.all()
+    assert solver._im0.get_array().mask.all()
+    assert solver._im0.get_clim() == (0, 1)
+    plt.close("all")
+    plt.ioff()
 
 
 @pytest.mark.parametrize("stepper_cls", [ROCK2, RKL1, RKL2])

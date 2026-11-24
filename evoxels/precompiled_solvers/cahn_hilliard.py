@@ -23,6 +23,8 @@ def run_cahn_hilliard_solver(
     export: str | bool = False,
     verbose: bool = True,
     plot_bounds = None,
+    background=None,
+    background_color='black',
 ):
     """
     Solves time-dependent Cahn-Hilliard problem with PseudoSpectralIMEX timestepper.
@@ -44,4 +46,6 @@ def run_cahn_hilliard_solver(
         verbose=verbose,
         export=export,
         plot_bounds=plot_bounds,
+        background=background,
+        background_color=background_color,
     )
